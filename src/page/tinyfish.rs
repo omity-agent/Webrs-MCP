@@ -52,13 +52,17 @@ impl TinyFishFetchClient {
             .await?
             .into_iter()
             .next()
-            .ok_or_else(|| AppError::internal("TinyFish batch response was empty"))
+            .ok_or_else(|| AppError::internal("TinyFish batch response was empty"))?
     }
     #[expect(
         clippy::missing_inline_in_public_items,
         reason = "TinyFish batch reads perform async HTTP I/O and are not inline candidates."
     )]
-    pub async fn read_markdown_many(&self, urls: &[String], api_key: &str) -> Result<Vec<String>> {
+    pub async fn read_markdown_many(
+        &self,
+        urls: &[String],
+        api_key: &str,
+    ) -> Result<Vec<Result<String>>> {
         let headers = headers(api_key)?;
         let payload = TinyFishPayload {
             urls: urls.iter().map(String::as_str).collect(),
@@ -92,7 +96,7 @@ fn headers(api_key: &str) -> Result<HeaderMap> {
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
     Ok(headers)
 }
-fn extract_markdowns(urls: &[String], body: &[u8]) -> Result<Vec<String>> {
+fn extract_markdowns(urls: &[String], body: &[u8]) -> Result<Vec<Result<String>>> {
     let payload = sonic_rs::from_slice::<TinyFishResponse>(body).map_err(|error| {
         AppError::client(format!(
             "TinyFish returned an unsupported response: {error}"
@@ -111,13 +115,13 @@ fn extract_markdowns(urls: &[String], body: &[u8]) -> Result<Vec<String>> {
     let mut markdowns = Vec::with_capacity(urls.len());
     for url in urls {
         if let Some(text) = results.get(url) {
-            markdowns.push(text.clone());
+            markdowns.push(Ok(text.clone()));
         } else if let Some(error) = errors.get(url) {
-            return Err(tinyfish_fetch_error(error));
+            markdowns.push(Err(tinyfish_fetch_error(error)));
         } else {
-            return Err(AppError::client(format!(
+            markdowns.push(Err(AppError::client(format!(
                 "TinyFish returned no content for the requested URL: {url}."
-            )));
+            ))));
         }
     }
     Ok(markdowns)

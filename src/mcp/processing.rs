@@ -2,49 +2,74 @@ use crate::{
     Result,
     config::FindConfig,
     error::AppError,
-    models::{FindPage, FindRequest, FindResponse, OpenPage, OpenRequest, OpenResponse},
+    models::{FindPage, FindRequest, FindResponse, OpenRequest, OpenResponse, OpenResult},
     page::{PageContent, TokenChunker, find_in_page, open_page_chunk},
 };
 use fancy_regex::Regex;
-use futures::future::try_join_all;
+use futures::future::{join_all, try_join_all};
+#[cfg(test)]
+mod tests;
 pub(crate) async fn open_pages(
     requests: &[OpenRequest],
-    pages: Vec<PageContent>,
+    pages: Vec<Result<PageContent>>,
     chunker: TokenChunker,
     mut warnings: Vec<String>,
-) -> Result<OpenResponse> {
-    let tasks = requests
-        .iter()
-        .zip(pages)
-        .enumerate()
-        .map(|(request_index, (request, page))| {
-            let page_chunker = chunker.clone();
-            let chunk_index = request.chunk;
-            tokio::task::spawn_blocking(move || {
-                let mut page_warnings = Vec::new();
-                let opened = open_page_chunk(
-                    &page,
-                    chunk_index,
-                    request_index,
-                    &page_chunker,
-                    &mut page_warnings,
-                )?;
-                Ok::<(OpenPage, Vec<String>), AppError>((opened, page_warnings))
+) -> OpenResponse {
+    let mut fetched_pages = pages.into_iter();
+    let tasks = requests.iter().enumerate().map(|(request_index, request)| {
+        let fetched = fetched_pages
+            .next()
+            .unwrap_or_else(|| Err(AppError::internal("page fetch result was missing")));
+        let page_chunker = chunker.clone();
+        let chunk_index = request.chunk;
+        let task_url = request.url.clone();
+        let result_url = task_url.clone();
+        async move {
+            let task = tokio::task::spawn_blocking(move || {
+                process_open_result(task_url, fetched, chunk_index, request_index, &page_chunker)
+            });
+            task.await.unwrap_or_else(|error| {
+                (
+                    OpenResult::Failure {
+                        url: result_url,
+                        error: AppError::internal(format!("page processing task failed: {error}"))
+                            .client_message(),
+                    },
+                    Vec::new(),
+                )
             })
-        });
-    let joined = try_join_all(tasks)
-        .await
-        .map_err(|error| AppError::internal(format!("page processing task failed: {error}")))?;
-    let mut opened = Vec::with_capacity(joined.len());
-    for result in joined {
-        let (page, page_warnings) = result?;
-        opened.push(page);
+        }
+    });
+    let joined = join_all(tasks).await;
+    let mut results = Vec::with_capacity(joined.len());
+    for (result, page_warnings) in joined {
+        results.push(result);
         warnings.extend(page_warnings);
     }
-    Ok(OpenResponse {
-        pages: opened,
+    OpenResponse {
+        results,
         warning: (!warnings.is_empty()).then_some(warnings),
-    })
+    }
+}
+fn process_open_result(
+    url: String,
+    fetched: Result<PageContent>,
+    chunk_index: usize,
+    request_index: usize,
+    chunker: &TokenChunker,
+) -> (OpenResult, Vec<String>) {
+    let mut warnings = Vec::new();
+    let opened = fetched.and_then(|page| {
+        open_page_chunk(&page, chunk_index, request_index, chunker, &mut warnings)
+    });
+    let result = match opened {
+        Ok(page) => OpenResult::Success { url, page },
+        Err(error) => OpenResult::Failure {
+            url,
+            error: error.client_message(),
+        },
+    };
+    (result, warnings)
 }
 pub(crate) async fn find_pages(
     requests: &[FindRequest],

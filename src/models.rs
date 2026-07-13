@@ -80,8 +80,18 @@ pub struct OpenPage {
     pub content: String,
 }
 #[derive(Clone, Debug, Serialize)]
+#[serde(untagged)]
+#[expect(
+    clippy::exhaustive_enums,
+    reason = "Open results have exactly one success or failure payload."
+)]
+pub enum OpenResult {
+    Success { url: String, page: OpenPage },
+    Failure { url: String, error: String },
+}
+#[derive(Clone, Debug, Serialize)]
 pub struct OpenResponse {
-    pub pages: Vec<OpenPage>,
+    pub results: Vec<OpenResult>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub warning: Option<Vec<String>>,
 }

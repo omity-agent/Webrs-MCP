@@ -95,15 +95,15 @@ impl ToolService {
             .collect::<Vec<_>>();
         let pages = self
             .page_fetcher
-            .fetch_many(&urls, credentials.as_ref())
-            .await?;
+            .fetch_many_partial(&urls, credentials.as_ref())
+            .await;
         let response = open_pages(
             &normalized.value.requests,
             pages,
             self.chunker.clone(),
             warnings,
         )
-        .await?;
+        .await;
         to_value(&response)
     }
     async fn find(&self, arguments: Option<Value>, headers: &HeaderMap) -> Result<Value> {

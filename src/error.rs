@@ -83,7 +83,7 @@ pub fn http_service_error(service: &str, status_code: u16) -> AppError {
     }
     if (400..500).contains(&status_code) {
         return AppError::client(format!(
-            "{service} rejected the request with HTTP {status_code}. Check the input URL and parameters."
+            "{service} rejected the request with HTTP {status_code}."
         ));
     }
     AppError::client(format!(

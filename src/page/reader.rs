@@ -4,7 +4,7 @@ use crate::{
     net::SecureHttpClient,
     page::{jina::JinaReaderClient, tinyfish::TinyFishFetchClient},
 };
-use futures::future::try_join_all;
+use futures::future::join_all;
 #[derive(Clone)]
 pub struct PageReader {
     jina: JinaReaderClient,
@@ -58,11 +58,11 @@ impl PageReader {
         &self,
         urls: &[String],
         credentials: &ReaderCredentials,
-    ) -> Result<Vec<String>> {
+    ) -> Result<Vec<Result<String>>> {
         match credentials {
             ReaderCredentials::Jina(api_key) => {
                 let reads = urls.iter().map(|url| self.jina.read_markdown(url, api_key));
-                try_join_all(reads).await
+                Ok(join_all(reads).await)
             }
             ReaderCredentials::TinyFish(api_key) => {
                 self.tinyfish.read_markdown_many(urls, api_key).await

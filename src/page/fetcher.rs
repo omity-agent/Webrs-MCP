@@ -9,11 +9,12 @@ use crate::{
     net::{SecureHttpClient, SsrfGuard, guard, secure_client_from_config},
     page::reader::{PageReader, ReaderCredentials},
 };
-use futures::{StreamExt as _, future::try_join_all, stream::FuturesUnordered};
+use futures::{StreamExt as _, stream::FuturesUnordered};
 use std::collections::HashMap;
 use targets::direct_fetch_targets;
 use tracing::warn;
 use url::Url;
+mod batch;
 mod targets;
 #[cfg(test)]
 mod tests;
@@ -73,58 +74,6 @@ impl PageFetcher {
             source: PageSource::Reader,
             markdown,
         })
-    }
-    #[expect(
-        clippy::missing_inline_in_public_items,
-        reason = "Batch page fetching coordinates direct HTTP attempts and optional remote reader calls."
-    )]
-    pub async fn fetch_many(
-        &self,
-        urls: &[String],
-        credentials: Option<&ReaderCredentials>,
-    ) -> Result<Vec<PageContent>> {
-        if !matches!(credentials, Some(ReaderCredentials::TinyFish(_))) {
-            let fetches = urls.iter().map(|url| self.fetch(url, credentials));
-            return try_join_all(fetches).await;
-        }
-        let mut pages = try_join_all(urls.iter().map(|url| self.fetch_direct(url))).await?;
-        let missing = pages
-            .iter()
-            .zip(urls.iter())
-            .enumerate()
-            .filter(|entry| entry.1.0.is_none())
-            .map(|(index, (_page, url))| (index, url.clone()))
-            .collect::<Vec<_>>();
-        if missing.is_empty() {
-            return collect_pages(pages);
-        }
-        let Some(reader_credentials) = credentials else {
-            return Err(self.missing_reader_credentials_error());
-        };
-        let missing_urls = missing
-            .iter()
-            .map(|entry| entry.1.clone())
-            .collect::<Vec<_>>();
-        let markdowns = self
-            .reader
-            .read_markdown_many(&missing_urls, reader_credentials)
-            .await?;
-        if markdowns.len() != missing.len() {
-            return Err(AppError::internal(
-                "TinyFish batch response count did not match requested URLs",
-            ));
-        }
-        for ((index, url), markdown) in missing.into_iter().zip(markdowns) {
-            let Some(page) = pages.get_mut(index) else {
-                return Err(AppError::internal("page fetch result index was missing"));
-            };
-            *page = Some(PageContent {
-                url,
-                source: PageSource::Reader,
-                markdown,
-            });
-        }
-        collect_pages(pages)
     }
     async fn fetch_direct(&self, url: &str) -> Result<Option<PageContent>> {
         let parsed =
@@ -214,10 +163,4 @@ impl PageFetcher {
             self.config.headers.jina_api_key, self.config.headers.tinyfish_api_key
         ))
     }
-}
-fn collect_pages(pages: Vec<Option<PageContent>>) -> Result<Vec<PageContent>> {
-    pages
-        .into_iter()
-        .map(|page| page.ok_or_else(|| AppError::internal("page fetch result was missing")))
-        .collect()
 }

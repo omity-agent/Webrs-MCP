@@ -22,7 +22,7 @@ search:
   endpoint: https://api.exa.ai/search # Exa search endpoint.
   num_results: 10 # Results per request.
   type: deep # Exa search type.
-  highlights_max_characters: 1000 # Highlight character budget.
+  highlights_max_characters: 600 # Highlight character budget.
   max_age_hours: 9007199254740991 # Cache age policy sent to Exa.
   livecrawl_timeout: 30000 # Exa livecrawl timeout in milliseconds.
 
@@ -59,7 +59,7 @@ tinyfish:
 # Token chunking behavior.
 chunking:
   tokenizer: o200k_base # Tokenizer name.
-  chunk_tokens: 5000 # Maximum tokens in one chunk.
+  chunk_tokens: 4000 # Maximum tokens in one chunk.
   overlap_ratio: 0.1 # Chunk overlap ratio.
 
 # Regex find behavior.
