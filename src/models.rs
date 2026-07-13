@@ -52,6 +52,7 @@ pub struct SearchQueryArguments {
     pub requests: Vec<SearchQueryRequest>,
 }
 #[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(deny_unknown_fields)]
 pub struct SearchResult {
     pub title: Option<String>,
     pub date: Option<String>,
@@ -59,6 +60,7 @@ pub struct SearchResult {
     pub highlight: String,
 }
 #[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(deny_unknown_fields)]
 pub struct SearchQueryResponse {
     pub results: Vec<SearchResult>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -74,6 +76,7 @@ pub struct OpenArguments {
     pub requests: Vec<OpenRequest>,
 }
 #[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(deny_unknown_fields)]
 pub struct OpenPage {
     pub chunk: usize,
     pub total_chunks: usize,
@@ -81,6 +84,7 @@ pub struct OpenPage {
 }
 #[derive(Clone, Debug, JsonSchema, Serialize)]
 #[serde(untagged)]
+#[schemars(deny_unknown_fields)]
 #[expect(
     clippy::exhaustive_enums,
     reason = "Open results have exactly one success or failure payload."
@@ -90,6 +94,7 @@ pub enum OpenResult {
     Failure { url: String, error: String },
 }
 #[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(deny_unknown_fields)]
 pub struct OpenResponse {
     pub results: Vec<OpenResult>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -108,16 +113,19 @@ pub struct FindArguments {
     pub requests: Vec<FindRequest>,
 }
 #[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(deny_unknown_fields)]
 pub struct FindMatch {
     pub chunk: usize,
     pub snippet: String,
 }
 #[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(deny_unknown_fields)]
 pub struct FindPage {
     pub total_chunks: usize,
     pub matches: Vec<FindMatch>,
 }
 #[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(deny_unknown_fields)]
 pub struct FindResponse {
     pub pages: Vec<FindPage>,
     #[serde(skip_serializing_if = "Option::is_none")]

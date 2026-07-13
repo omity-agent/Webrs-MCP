@@ -6,11 +6,9 @@ use crate::{
         SearchQueryResponse,
     },
 };
-use rmcp::{
-    handler::server::tool::schema_for_output,
-    model::{JsonObject, Tool},
-};
-use schemars::{JsonSchema, schema_for};
+use alloc::sync::Arc;
+use rmcp::model::{JsonObject, Tool};
+use schemars::{JsonSchema, generate::SchemaSettings, schema_for, transform::RestrictFormats};
 #[inline]
 pub fn tools() -> Result<Vec<Tool>> {
     Ok(vec![
@@ -32,12 +30,36 @@ pub fn tool_by_name(name: &str) -> Result<Option<Tool>> {
 fn tool<I, O>(name: &'static str, description: &'static str) -> Result<Tool>
 where
     I: JsonSchema,
-    O: JsonSchema + 'static,
+    O: JsonSchema,
 {
-    let output_schema = schema_for_output::<O>().map_err(|error| {
+    let output_schema = output_schema::<O>()?;
+    Ok(Tool::new(name, description, schema_object::<I>()?).with_raw_output_schema(output_schema))
+}
+fn output_schema<T>() -> Result<Arc<JsonObject>>
+where
+    T: JsonSchema,
+{
+    let settings = SchemaSettings::draft2020_12()
+        .for_serialize()
+        .with(|settings| settings.inline_subschemas = true)
+        .with_transform(RestrictFormats::default());
+    let schema = settings.into_generator().into_root_schema_for::<T>();
+    let value = rmcp::serde_json::to_value(schema).map_err(|error| {
         AppError::internal(format!("failed to build tool output schema: {error}"))
     })?;
-    Ok(Tool::new(name, description, schema_object::<I>()?).with_raw_output_schema(output_schema))
+    let rmcp::serde_json::Value::Object(mut object) = value else {
+        return Err(AppError::internal(
+            "tool output schema is not a JSON object",
+        ));
+    };
+    if object.get("type").and_then(rmcp::serde_json::Value::as_str) != Some("object") {
+        return Err(AppError::internal(
+            "tool output schema root type is not object",
+        ));
+    }
+    object.remove("title");
+    object.remove("description");
+    Ok(Arc::new(object))
 }
 fn schema_object<T>() -> Result<JsonObject>
 where
