@@ -12,8 +12,10 @@ use alloc::borrow::Cow;
 use axum::http::HeaderMap;
 use fancy_regex::Regex;
 use sonic_rs::Value;
+mod render;
 #[cfg(test)]
 mod tests;
+pub(crate) use render::ToolOutput;
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ToolCredentials {
     pub exa_api_key: Option<String>,
@@ -46,16 +48,12 @@ impl ToolService {
     pub(crate) const fn config(&self) -> &AppConfig {
         &self.config
     }
-    #[expect(
-        clippy::missing_inline_in_public_items,
-        reason = "Tool dispatch performs async service work and is not an inline candidate."
-    )]
-    pub async fn call(
+    pub(crate) async fn call(
         &self,
         name: &str,
         arguments: Option<Value>,
         headers: &HeaderMap,
-    ) -> Result<Value> {
+    ) -> Result<ToolOutput> {
         match name {
             "search_query" => self.search_query(arguments, headers).await,
             "open" => self.open(arguments, headers).await,
@@ -63,7 +61,11 @@ impl ToolService {
             other => Err(AppError::client(format!("Unknown tool: {other}"))),
         }
     }
-    async fn search_query(&self, arguments: Option<Value>, headers: &HeaderMap) -> Result<Value> {
+    async fn search_query(
+        &self,
+        arguments: Option<Value>,
+        headers: &HeaderMap,
+    ) -> Result<ToolOutput> {
         let normalized = search_arguments(arguments)?;
         let key = required_api_key(
             headers,
@@ -74,12 +76,12 @@ impl ToolService {
             .search
             .search_many(&normalized.value.requests, &key)
             .await?;
-        to_value(&SearchQueryResponse {
+        Ok(ToolOutput::Search(SearchQueryResponse {
             results,
             warning: normalized.warning,
-        })
+        }))
     }
-    async fn open(&self, arguments: Option<Value>, headers: &HeaderMap) -> Result<Value> {
+    async fn open(&self, arguments: Option<Value>, headers: &HeaderMap) -> Result<ToolOutput> {
         let normalized = open_arguments(arguments)?;
         let warnings = normalized.warning.unwrap_or_default();
         let credentials = reader_credentials(
@@ -104,9 +106,9 @@ impl ToolService {
             warnings,
         )
         .await;
-        to_value(&response)
+        Ok(ToolOutput::Open(response))
     }
-    async fn find(&self, arguments: Option<Value>, headers: &HeaderMap) -> Result<Value> {
+    async fn find(&self, arguments: Option<Value>, headers: &HeaderMap) -> Result<ToolOutput> {
         let normalized = find_arguments(arguments)?;
         let credentials = reader_credentials(
             headers,
@@ -135,7 +137,7 @@ impl ToolService {
             warnings,
         )
         .await?;
-        to_value(&response)
+        Ok(ToolOutput::Find(response))
     }
 }
 fn compile_patterns(requests: &[crate::models::FindRequest]) -> Result<Vec<Regex>> {
@@ -186,11 +188,4 @@ fn optional_header(headers: &HeaderMap, name: &str) -> Option<String> {
         .and_then(|value| value.to_str().ok())
         .filter(|value| !value.is_empty())
         .map(str::to_owned)
-}
-fn to_value<T>(value: &T) -> Result<Value>
-where
-    T: serde::Serialize,
-{
-    sonic_rs::to_value(value)
-        .map_err(|error| AppError::internal(format!("failed to encode tool response: {error}")))
 }

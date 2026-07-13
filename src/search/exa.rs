@@ -175,6 +175,6 @@ fn to_search_result(result: ExaResult) -> SearchResult {
         title: result.title,
         date: result.published_date,
         url: result.url,
-        summary: result.highlights.unwrap_or_default().join("\n"),
+        highlight: result.highlights.unwrap_or_default().join("\n"),
     }
 }

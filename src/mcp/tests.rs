@@ -11,8 +11,23 @@ fn rmcp_tools_expose_expected_schemas() {
         .map(|tool| tool.name.as_ref())
         .collect::<Vec<_>>();
     assert_eq!(names, ["search_query", "open", "find"]);
-    for tool in tools {
+    let output_properties = ["results", "results", "pages"];
+    for (tool, expected_property) in tools.into_iter().zip(output_properties) {
         assert!(tool.input_schema.contains_key("properties"));
+        let output_schema = tool
+            .output_schema
+            .unwrap_or_else(|| panic!("{} is missing outputSchema", tool.name));
+        assert_eq!(
+            output_schema
+                .get("type")
+                .and_then(rmcp::serde_json::Value::as_str),
+            Some("object")
+        );
+        let properties = output_schema
+            .get("properties")
+            .and_then(rmcp::serde_json::Value::as_object)
+            .unwrap_or_else(|| panic!("{} outputSchema has no properties", tool.name));
+        assert!(properties.contains_key(expected_property));
     }
 }
 #[test]

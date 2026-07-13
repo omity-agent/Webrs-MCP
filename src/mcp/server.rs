@@ -2,14 +2,18 @@ use crate::{
     VERSION,
     config::AppConfig,
     error::AppError,
-    mcp::{schemas, tools::ToolService},
+    mcp::{
+        schemas,
+        tools::{ToolOutput, ToolService},
+    },
 };
 use axum::http::HeaderMap;
 use rmcp::{
     ErrorData as McpError, ServerHandler,
     model::{
-        CallToolRequestParams, CallToolResult, Implementation, JsonObject, ListToolsResult,
-        PaginatedRequestParams, ProtocolVersion, ServerCapabilities, ServerInfo, Tool,
+        CallToolRequestParams, CallToolResult, ContentBlock, Implementation, JsonObject,
+        ListToolsResult, PaginatedRequestParams, ProtocolVersion, ServerCapabilities, ServerInfo,
+        Tool,
     },
     service::{MaybeSendFuture, RequestContext, RoleServer},
 };
@@ -57,11 +61,11 @@ impl ServerHandler for ToolService {
             let empty_headers = HeaderMap::new();
             let headers = request_headers(&context).unwrap_or(&empty_headers);
             let arguments = sonic_arguments(request.arguments)?;
-            let structured = self
+            let output = self
                 .call(request.name.as_ref(), arguments, headers)
                 .await
                 .map_err(to_mcp_error)?;
-            structured_result(&structured)
+            tool_result(&output)
         }
     }
 }
@@ -92,14 +96,17 @@ fn sonic_arguments(arguments: Option<JsonObject>) -> Result<Option<Value>, McpEr
             McpError::internal_error(format!("failed to read arguments: {error}"), None)
         })
 }
-fn structured_result(structured: &Value) -> Result<CallToolResult, McpError> {
-    let bytes = sonic_rs::to_vec(structured).map_err(|error| {
+pub(crate) fn tool_result(output: &ToolOutput) -> Result<CallToolResult, McpError> {
+    let structured = output.structured().map_err(to_mcp_error)?;
+    let bytes = sonic_rs::to_vec(&structured).map_err(|error| {
         McpError::internal_error(format!("failed to encode result: {error}"), None)
     })?;
     let json = rmcp::serde_json::from_slice(&bytes).map_err(|error| {
         McpError::internal_error(format!("failed to bridge result: {error}"), None)
     })?;
-    Ok(CallToolResult::structured(json))
+    let mut result = CallToolResult::success(vec![ContentBlock::text(output.standard_text())]);
+    result.structured_content = Some(json);
+    Ok(result)
 }
 fn to_mcp_error(error: AppError) -> McpError {
     match error {

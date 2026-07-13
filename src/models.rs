@@ -51,14 +51,14 @@ pub struct SearchQueryRequest {
 pub struct SearchQueryArguments {
     pub requests: Vec<SearchQueryRequest>,
 }
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
 pub struct SearchResult {
     pub title: Option<String>,
     pub date: Option<String>,
     pub url: String,
-    pub summary: String,
+    pub highlight: String,
 }
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
 pub struct SearchQueryResponse {
     pub results: Vec<SearchResult>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -73,13 +73,13 @@ pub struct OpenRequest {
 pub struct OpenArguments {
     pub requests: Vec<OpenRequest>,
 }
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
 pub struct OpenPage {
     pub chunk: usize,
     pub total_chunks: usize,
     pub content: String,
 }
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
 #[serde(untagged)]
 #[expect(
     clippy::exhaustive_enums,
@@ -89,7 +89,7 @@ pub enum OpenResult {
     Success { url: String, page: OpenPage },
     Failure { url: String, error: String },
 }
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
 pub struct OpenResponse {
     pub results: Vec<OpenResult>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -107,17 +107,17 @@ pub struct FindRequest {
 pub struct FindArguments {
     pub requests: Vec<FindRequest>,
 }
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
 pub struct FindMatch {
     pub chunk: usize,
     pub snippet: String,
 }
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
 pub struct FindPage {
     pub total_chunks: usize,
     pub matches: Vec<FindMatch>,
 }
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
 pub struct FindResponse {
     pub pages: Vec<FindPage>,
     #[serde(skip_serializing_if = "Option::is_none")]
