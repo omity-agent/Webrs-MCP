@@ -1,4 +1,5 @@
 mod embedded;
+mod protocol;
 #[cfg(test)]
 mod tests;
 pub mod types;
@@ -12,10 +13,12 @@ pub type HeaderConfig = types::HeaderConfig;
 pub type HttpConfig = types::HttpConfig;
 pub type JinaConfig = types::JinaConfig;
 pub type JinaViewportConfig = types::JinaViewportConfig;
+pub type ProtocolConfig = protocol::ProtocolConfig;
 pub type SearchConfig = types::SearchConfig;
 pub type ServerConfig = types::ServerConfig;
 pub type SsrfConfig = types::SsrfConfig;
 pub type TinyFishConfig = types::TinyFishConfig;
+pub type ToolListCacheConfig = protocol::ToolListCacheConfig;
 #[inline]
 #[must_use]
 pub const fn default_yaml() -> &'static str {

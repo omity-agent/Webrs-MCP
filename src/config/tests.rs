@@ -1,4 +1,5 @@
 use crate::{Result, config};
+use rmcp::model::CacheScope;
 #[test]
 #[expect(
     clippy::panic_in_result_fn,
@@ -8,6 +9,8 @@ fn embedded_config_is_valid() -> Result<()> {
     let loaded = config::load_embedded()?;
     loaded.validate()?;
     assert_eq!(loaded.server.name, "web");
+    assert_eq!(loaded.protocol.tools_list_cache.ttl_ms, 3_600_000);
+    assert_eq!(loaded.protocol.tools_list_cache.scope, CacheScope::Public);
     assert!(config::default_yaml().contains("server:"));
     Ok(())
 }

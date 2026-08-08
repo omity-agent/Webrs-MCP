@@ -12,17 +12,19 @@ use axum::http::HeaderMap;
 use rmcp::{
     ErrorData as McpError, ServerHandler,
     model::{
-        CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation,
-        JsonObject, ListToolsResult, PaginatedRequestParams, ProtocolVersion, ServerCapabilities,
-        ServerInfo, Tool,
+        CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, ErrorCode,
+        Implementation, InitializeRequestParams, InitializeResult, JsonObject, ListToolsResult,
+        PaginatedRequestParams, ProtocolVersion, ServerCapabilities, ServerInfo, Tool,
     },
     service::{MaybeSendFuture, RequestContext, RoleServer},
 };
 use sonic_rs::Value;
 const SUPPORTED_PROTOCOL_VERSIONS: &[ProtocolVersion] = &[ProtocolVersion::V_2026_07_28];
+#[cfg(test)]
+mod tests;
 #[expect(
     clippy::missing_trait_methods,
-    reason = "RMCP ServerHandler defaults are intentionally used for unsupported protocol hooks."
+    reason = "RMCP defaults are intentionally used for protocol hooks this tools-only server does not advertise."
 )]
 impl ServerHandler for ToolService {
     #[inline]
@@ -34,20 +36,23 @@ impl ServerHandler for ToolService {
         Cow::Borrowed(SUPPORTED_PROTOCOL_VERSIONS)
     }
     #[inline]
-    #[expect(
-        clippy::manual_async_fn,
-        reason = "The trait requires return-position futures with MaybeSendFuture bounds."
-    )]
+    fn initialize(
+        &self,
+        _request: InitializeRequestParams,
+        _context: RequestContext<RoleServer>,
+    ) -> impl Future<Output = Result<InitializeResult, McpError>> + MaybeSendFuture + '_ {
+        core::future::ready(Err(initialize_error()))
+    }
+    #[inline]
     fn list_tools(
         &self,
         _request: Option<PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
     ) -> impl Future<Output = Result<ListToolsResult, McpError>> + MaybeSendFuture + '_ {
-        async move {
-            schemas::tools()
-                .map(ListToolsResult::with_all_items)
-                .map_err(to_mcp_error)
-        }
+        let result = schemas::tools()
+            .map(|tools| list_tools_result(self.config(), tools))
+            .map_err(to_mcp_error);
+        core::future::ready(result)
     }
     #[inline]
     fn get_tool(&self, name: &str) -> Option<Tool> {
@@ -64,16 +69,38 @@ impl ServerHandler for ToolService {
         context: RequestContext<RoleServer>,
     ) -> impl Future<Output = Result<CallToolResponse, McpError>> + MaybeSendFuture + '_ {
         async move {
+            let tool_name = request.name.as_ref();
+            if schemas::tool_by_name(tool_name)
+                .map_err(to_mcp_error)?
+                .is_none()
+            {
+                return Err(McpError::invalid_params(
+                    format!("Unknown tool: {tool_name}"),
+                    None,
+                ));
+            }
             let empty_headers = HeaderMap::new();
             let headers = request_headers(&context).unwrap_or(&empty_headers);
             let arguments = sonic_arguments(request.arguments)?;
-            let output = self
-                .call(request.name.as_ref(), arguments, headers)
-                .await
-                .map_err(to_mcp_error)?;
-            tool_result(&output).map(Into::into)
+            match self.call(tool_name, arguments, headers).await {
+                Ok(output) => tool_result(&output).map(Into::into),
+                Err(error) => tool_failure(error).map(Into::into),
+            }
         }
     }
+}
+fn initialize_error() -> McpError {
+    McpError::new(
+        ErrorCode::METHOD_NOT_FOUND,
+        "initialize was removed in MCP 2026-07-28; use server/discover",
+        None,
+    )
+}
+fn list_tools_result(config: &AppConfig, tools: Vec<Tool>) -> ListToolsResult {
+    let cache = &config.protocol.tools_list_cache;
+    ListToolsResult::with_all_items(tools)
+        .with_ttl_ms(cache.ttl_ms)
+        .with_cache_scope(cache.scope)
 }
 fn server_info(config: &AppConfig) -> ServerInfo {
     let capabilities = ServerCapabilities::builder().enable_tools().build();
@@ -109,6 +136,14 @@ pub(crate) fn tool_result(output: &ToolOutput) -> Result<CallToolResult, McpErro
     let mut result = CallToolResult::success(vec![ContentBlock::text(output.standard_text())]);
     result.structured_content = Some(json);
     Ok(result)
+}
+fn tool_failure(error: AppError) -> Result<CallToolResult, McpError> {
+    match error {
+        AppError::Client(message) | AppError::Upstream(message) => {
+            Ok(CallToolResult::error(vec![ContentBlock::text(message)]))
+        }
+        failure @ (AppError::Config(_) | AppError::Internal(_)) => Err(to_mcp_error(failure)),
+    }
 }
 fn to_mcp_error(error: AppError) -> McpError {
     match error {

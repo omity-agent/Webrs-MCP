@@ -107,6 +107,7 @@ pub struct SsrfConfig {
 #[serde(deny_unknown_fields)]
 pub struct AppConfig {
     pub server: ServerConfig,
+    pub protocol: crate::config::ProtocolConfig,
     pub headers: HeaderConfig,
     pub search: SearchConfig,
     pub http: HttpConfig,

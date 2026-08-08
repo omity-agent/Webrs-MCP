@@ -9,6 +9,12 @@ server:
   allowed_hosts: [] # Host header allow-list; empty accepts every Host header.
   allowed_origins: [] # Optional browser Origin allow-list; empty disables Origin checks.
 
+# MCP protocol response policies.
+protocol:
+  tools_list_cache:
+    ttl_ms: 3600000 # Tools remain fresh for one hour; the list is static for this process.
+    scope: public # Tool definitions do not vary by authorization context.
+
 # Header names expected from MCP HTTP clients.
 headers:
   exa_api_key: x-exa-api-key # Exa API key header.

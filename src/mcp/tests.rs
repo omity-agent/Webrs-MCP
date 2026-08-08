@@ -1,6 +1,8 @@
 use crate::{
     VERSION, config,
-    mcp::{schemas, stdio_service, tools::ToolCredentials, tools::ToolService},
+    mcp::{
+        schemas, stdio_service, streamable_http_config, tools::ToolCredentials, tools::ToolService,
+    },
 };
 use rmcp::{ServerHandler, model::ProtocolVersion};
 #[test]
@@ -107,6 +109,13 @@ fn rmcp_server_info_uses_embedded_identity() {
     assert_eq!(info.server_info.name, "web");
     assert_eq!(info.server_info.version, VERSION);
     assert!(info.capabilities.tools.is_some());
+}
+#[test]
+fn streamable_http_uses_the_modern_stateless_lifecycle() {
+    let config = config::load_embedded().unwrap_or_else(|error| panic!("{error}"));
+    let http = streamable_http_config(&config);
+    assert!(!http.legacy_session_mode);
+    assert!(http.stateless_protocol_metadata_required);
 }
 #[test]
 fn stdio_service_allows_private_network_urls() {
