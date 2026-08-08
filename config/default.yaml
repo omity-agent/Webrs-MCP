@@ -5,9 +5,7 @@ server:
   host: 0.0.0.0 # Bind address.
   port: 18080 # Bind port.
   log_level: info # Trace log level.
-  protocol_version: "2025-06-18" # MCP protocol version.
-  stateful_http: false # RMCP Streamable HTTP session mode.
-  json_response: true # Return JSON directly instead of SSE for stateless requests.
+  json_response: true # Return JSON directly instead of SSE for requests.
   allowed_hosts: [] # Host header allow-list; empty accepts every Host header.
   allowed_origins: [] # Optional browser Origin allow-list; empty disables Origin checks.
 

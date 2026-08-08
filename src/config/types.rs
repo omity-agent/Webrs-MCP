@@ -8,8 +8,6 @@ pub struct ServerConfig {
     pub host: String,
     pub port: u16,
     pub log_level: String,
-    pub protocol_version: String,
-    pub stateful_http: bool,
     pub json_response: bool,
     pub allowed_hosts: Vec<String>,
     pub allowed_origins: Vec<String>,

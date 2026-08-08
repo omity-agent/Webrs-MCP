@@ -2,7 +2,7 @@ use crate::{
     VERSION, config,
     mcp::{schemas, stdio_service, tools::ToolCredentials, tools::ToolService},
 };
-use rmcp::ServerHandler;
+use rmcp::{ServerHandler, model::ProtocolVersion};
 #[test]
 fn rmcp_tools_expose_expected_schemas() {
     let tools = schemas::tools().unwrap_or_else(|error| panic!("{error}"));
@@ -99,7 +99,11 @@ fn rmcp_server_info_uses_embedded_identity() {
     let config = config::load_embedded().unwrap_or_else(|error| panic!("{error}"));
     let service = ToolService::new(config).unwrap_or_else(|error| panic!("{error}"));
     let info = ServerHandler::get_info(&service);
-    assert_eq!(info.protocol_version.as_str(), "2025-06-18");
+    assert_eq!(info.protocol_version, ProtocolVersion::V_2026_07_28);
+    assert_eq!(
+        ServerHandler::supported_protocol_versions(&service).as_ref(),
+        &[ProtocolVersion::V_2026_07_28]
+    );
     assert_eq!(info.server_info.name, "web");
     assert_eq!(info.server_info.version, VERSION);
     assert!(info.capabilities.tools.is_some());

@@ -1,14 +1,12 @@
 use crate::{
     Result,
     config::{DirectFetchConfig, HttpConfig},
-    direct::{
-        content::extract_content,
-        target::{DirectFetchTarget, ResponseFormat},
-    },
+    direct::target::{DirectFetchTarget, ResponseFormat},
     error::AppError,
     net::{FetchResponse, SecureHttpClient},
 };
-use futures::future::{BoxFuture, FutureExt as _, Shared, join};
+use futures::future::{BoxFuture, Shared, join};
+use probe::extract_direct_content;
 use reqwest::header::{ACCEPT, HeaderMap, HeaderValue, USER_AGENT};
 pub type SharedProbeFetch = Shared<BoxFuture<'static, Result<FetchResponse>>>;
 #[expect(
@@ -57,37 +55,7 @@ pub fn shared_probe_fetch(
     direct_config: &DirectFetchConfig,
     http_config: &HttpConfig,
 ) -> Result<SharedProbeFetch> {
-    let headers = request_headers(&client, target)?;
-    let timeout_seconds = http_config.direct_fetch_timeout_seconds;
-    let max_bytes = direct_config.max_bytes;
-    Ok(async move {
-        client
-            .get_with_body_limit(&probe_url, headers, timeout_seconds, max_bytes)
-            .await
-    }
-    .boxed()
-    .shared())
-}
-fn extract_direct_content(
-    target: &DirectFetchTarget,
-    response: &FetchResponse,
-    probe_response: Option<Result<FetchResponse>>,
-    direct_config: &DirectFetchConfig,
-) -> Result<String> {
-    let content = extract_content(
-        target,
-        response.status.as_u16(),
-        &response.headers,
-        &response.body,
-        direct_config,
-    )?;
-    if response.status.as_u16() == 200
-        && let Some(probe_result) = probe_response
-    {
-        let probe_check_response = probe_result?;
-        reject_if_probe_is_similar(target, &probe_check_response, direct_config, &content)?;
-    }
-    Ok(content)
+    probe::shared_probe_fetch(client, probe_url, target, direct_config, http_config)
 }
 async fn fetch_target_responses(
     client: &SecureHttpClient,
@@ -145,42 +113,6 @@ fn request_headers(client: &SecureHttpClient, target: &DirectFetchTarget) -> Res
     headers.insert(USER_AGENT, client.user_agent());
     Ok(headers)
 }
-fn reject_if_probe_is_similar(
-    target: &DirectFetchTarget,
-    response: &FetchResponse,
-    direct_config: &DirectFetchConfig,
-    content: &str,
-) -> Result<()> {
-    let Some(probe_url) = target.similarity_probe_url.as_deref() else {
-        return Ok(());
-    };
-    if response.status.as_u16() != 200 {
-        return Ok(());
-    }
-    let mut probe_target = target.clone();
-    #[expect(
-        clippy::assigning_clones,
-        reason = "The cloned probe URL replaces a cloned request target for one validation request."
-    )]
-    {
-        probe_target.request_url = probe_url.to_owned();
-    }
-    probe_target.similarity_probe_url = None;
-    let probe_content = extract_content(
-        &probe_target,
-        response.status.as_u16(),
-        &response.headers,
-        &response.body,
-        direct_config,
-    )?;
-    let similarity = strsim::normalized_levenshtein(content, &probe_content);
-    if similarity >= direct_config.similarity_threshold {
-        return Err(AppError::client(format!(
-            "Direct Markdown content is too similar to a known-missing URL response ({similarity:.3})."
-        )));
-    }
-    Ok(())
-}
 fn accept_header(target: &DirectFetchTarget) -> String {
     if let Some(value) = target.accept_header.clone() {
         return value;
@@ -202,5 +134,6 @@ fn accept_header(target: &DirectFetchTarget) -> String {
 fn header_error(error: reqwest::header::InvalidHeaderValue) -> AppError {
     AppError::internal(format!("invalid configured HTTP header: {error}"))
 }
+mod probe;
 #[cfg(test)]
 mod tests;

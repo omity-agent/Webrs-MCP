@@ -22,7 +22,6 @@ fn embedded_config_has_compile_time_source_name() {
 )]
 fn embedded_config_keeps_runtime_free_defaults() -> Result<()> {
     let loaded = config::load_embedded()?;
-    assert!(!loaded.server.stateful_http);
     assert!(loaded.server.json_response);
     assert_eq!(loaded.search.endpoint, "https://api.exa.ai/search");
     assert_eq!(loaded.tinyfish.endpoint, "https://api.fetch.tinyfish.ai");

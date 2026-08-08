@@ -6,16 +6,16 @@ pub mod tools;
 use crate::{Result, config::AppConfig};
 use rmcp::transport::{
     StreamableHttpServerConfig,
-    streamable_http_server::{session::local::LocalSessionManager, tower::StreamableHttpService},
+    streamable_http_server::{session::never::NeverSessionManager, tower::StreamableHttpService},
 };
-pub(crate) type HttpMcpService = StreamableHttpService<tools::ToolService, LocalSessionManager>;
+pub(crate) type HttpMcpService = StreamableHttpService<tools::ToolService, NeverSessionManager>;
 #[cfg(test)]
 mod tests;
 pub(crate) fn http_service(config: &AppConfig) -> Result<HttpMcpService> {
     let tools = tools::ToolService::new(config.clone())?;
     Ok(StreamableHttpService::new(
         move || Ok(tools.clone()),
-        LocalSessionManager::default().into(),
+        NeverSessionManager::default().into(),
         streamable_http_config(config),
     ))
 }
@@ -32,7 +32,6 @@ pub(crate) fn stdio_service(
 #[must_use]
 pub(crate) fn streamable_http_config(config: &AppConfig) -> StreamableHttpServerConfig {
     StreamableHttpServerConfig::default()
-        .with_stateful_mode(config.server.stateful_http)
         .with_json_response(config.server.json_response)
         .with_allowed_hosts(config.server.allowed_hosts.clone())
         .with_allowed_origins(config.server.allowed_origins.clone())
