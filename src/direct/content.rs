@@ -41,7 +41,11 @@ pub fn extract_content(
         }
         ResponseFormat::PackageRegistryJson => {
             let payload = json_payload(body, target.response_format)?;
-            format_package_registry_json(&payload, &target.json_fields_last)
+            format_package_registry_json(
+                &payload,
+                &target.json_fields_first,
+                &target.json_fields_last,
+            )
         }
         ResponseFormat::StackOverflowQuestionJson => {
             let payload = json_payload(body, target.response_format)?;

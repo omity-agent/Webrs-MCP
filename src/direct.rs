@@ -35,6 +35,7 @@ pub fn resolve_direct_fetch_target(
         return Some(DirectFetchTarget::package(
             url,
             registry.request_url,
+            registry.json_fields_first,
             registry.json_fields_last,
         ));
     }

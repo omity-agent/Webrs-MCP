@@ -41,7 +41,47 @@ fn scoped_npm_package_uses_registry_json() -> Result<()> {
         target.request_url,
         "https://registry.npmjs.org/@types%2Fnode"
     );
+    assert_eq!(
+        target.json_fields_first,
+        ["name", "description", "readme", "repository"]
+    );
     assert_eq!(target.json_fields_last, ["versions"]);
+    Ok(())
+}
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The test uses assertions while Result keeps setup failures readable."
+)]
+fn npm_registry_json_starts_with_selected_package_fields() -> Result<()> {
+    let config = config::load_embedded()?;
+    let target = resolve_direct_fetch_target(
+        "https://www.npmjs.com/package/example",
+        &config.direct_fetch,
+    )
+    .ok_or_else(|| crate::error::AppError::internal("npm target was not resolved"))?;
+    let body = br##"{
+        "_id": "example",
+        "repository": {"type": "git", "url": "https://example.com/repository.git"},
+        "readme": "# Example",
+        "description": "Example package",
+        "name": "example",
+        "dist-tags": {"latest": "1.0.0"},
+        "versions": {"1.0.0": {"name": "example"}}
+    }"##;
+    let content = extract_content(&target, 200, &HeaderMap::new(), body, &config.direct_fetch)?;
+    let expected_prefix = concat!(
+        "{\n  \"name\": \"example\",\n",
+        "  \"description\": \"Example package\",\n",
+        "  \"readme\": \"# Example\",\n",
+        "  \"repository\": {"
+    );
+    assert!(
+        content.starts_with(expected_prefix),
+        "unexpected npm registry JSON field order:\n{content}"
+    );
+    assert!(content.contains("\"_id\": \"example\""));
+    assert!(content.ends_with("  }\n}"));
     Ok(())
 }
 #[test]

@@ -1,10 +1,12 @@
 use crate::config::DirectFetchConfig;
 use percent_encoding::percent_decode_str;
+use serde::{Serialize, Serializer, ser::SerializeMap as _};
 use sonic_rs::JsonContainerTrait as _;
 use url::Url;
 #[derive(Debug)]
 pub struct PackageRegistryTarget {
     pub request_url: String,
+    pub json_fields_first: Vec<String>,
     pub json_fields_last: Vec<String>,
 }
 #[inline]
@@ -18,12 +20,17 @@ pub fn resolve_package_registry_target(
     if host == "pypi.org" {
         return pypi_name(&parts).map(|name| PackageRegistryTarget {
             request_url: format!("https://pypi.org/pypi/{}/json", urlencoding::encode(&name)),
+            json_fields_first: Vec::new(),
             json_fields_last: vec!["releases".to_owned()],
         });
     }
     if contains(&config.npm_hosts, &host) {
         return npm_name(&host, &parts).map(|name| PackageRegistryTarget {
             request_url: format!("{}{}", config.npm_registry_url_prefix, npm_encode(&name)),
+            json_fields_first: ["name", "description", "readme", "repository"]
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
             json_fields_last: vec!["versions".to_owned()],
         });
     }
@@ -33,6 +40,7 @@ pub fn resolve_package_registry_target(
                 "https://crates.io/api/v1/crates/{}",
                 urlencoding::encode(&name)
             ),
+            json_fields_first: Vec::new(),
             json_fields_last: vec!["versions".to_owned()],
         });
     }
@@ -41,27 +49,55 @@ pub fn resolve_package_registry_target(
 #[inline]
 pub fn format_package_registry_json(
     payload: &sonic_rs::Value,
+    fields_first: &[String],
     fields_last: &[String],
 ) -> crate::Result<String> {
     if let Some(object) = payload.as_object() {
-        let mut reordered = sonic_rs::Object::new();
-        for (key, value) in object {
-            if !fields_last.iter().any(|field| field == key) {
-                reordered.insert(key, value.clone());
-            }
-        }
-        for field in fields_last {
-            if let Some(value) = object.get(field) {
-                reordered.insert(field, value.clone());
-            }
-        }
-        return sonic_rs::to_string_pretty(&reordered).map_err(|error| {
+        let ordered = OrderedRegistryObject {
+            object,
+            fields_first,
+            fields_last,
+        };
+        return sonic_rs::to_string_pretty(&ordered).map_err(|error| {
             crate::error::AppError::internal(format!("failed to serialize registry JSON: {error}"))
         });
     }
     sonic_rs::to_string_pretty(payload).map_err(|error| {
         crate::error::AppError::internal(format!("failed to serialize registry JSON: {error}"))
     })
+}
+struct OrderedRegistryObject<'payload> {
+    object: &'payload sonic_rs::Object,
+    fields_first: &'payload [String],
+    fields_last: &'payload [String],
+}
+impl Serialize for OrderedRegistryObject<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut map = serializer.serialize_map(Some(self.object.len()))?;
+        for field in self.fields_first {
+            if let Some(value) = self.object.get(field) {
+                map.serialize_entry(field, value)?;
+            }
+        }
+        for (key, value) in self.object {
+            if !self.fields_first.iter().any(|field| field == key)
+                && !self.fields_last.iter().any(|field| field == key)
+            {
+                map.serialize_entry(key, value)?;
+            }
+        }
+        for field in self.fields_last {
+            if !self.fields_first.iter().any(|first| first == field)
+                && let Some(value) = self.object.get(field)
+            {
+                map.serialize_entry(field, value)?;
+            }
+        }
+        map.end()
+    }
 }
 fn pypi_name(parts: &[String]) -> Option<String> {
     let (section, rest) = parts.split_first()?;
