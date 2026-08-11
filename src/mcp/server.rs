@@ -12,9 +12,9 @@ use axum::http::HeaderMap;
 use rmcp::{
     ErrorData as McpError, ServerHandler,
     model::{
-        CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, ErrorCode,
-        Implementation, InitializeRequestParams, InitializeResult, JsonObject, ListToolsResult,
-        PaginatedRequestParams, ProtocolVersion, ServerCapabilities, ServerInfo, Tool,
+        CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, DiscoverResult,
+        Implementation, JsonObject, ListToolsResult, PaginatedRequestParams, ProtocolVersion,
+        ServerCapabilities, ServerInfo, Tool,
     },
     service::{MaybeSendFuture, RequestContext, RoleServer},
 };
@@ -36,12 +36,11 @@ impl ServerHandler for ToolService {
         Cow::Borrowed(SUPPORTED_PROTOCOL_VERSIONS)
     }
     #[inline]
-    fn initialize(
+    fn discover(
         &self,
-        _request: InitializeRequestParams,
         _context: RequestContext<RoleServer>,
-    ) -> impl Future<Output = Result<InitializeResult, McpError>> + MaybeSendFuture + '_ {
-        core::future::ready(Err(initialize_error()))
+    ) -> impl Future<Output = Result<DiscoverResult, McpError>> + MaybeSendFuture + '_ {
+        core::future::ready(Ok(discover_result(self.config())))
     }
     #[inline]
     fn list_tools(
@@ -89,18 +88,14 @@ impl ServerHandler for ToolService {
         }
     }
 }
-fn initialize_error() -> McpError {
-    McpError::new(
-        ErrorCode::METHOD_NOT_FOUND,
-        "initialize was removed in MCP 2026-07-28; use server/discover",
-        None,
-    )
-}
 fn list_tools_result(config: &AppConfig, tools: Vec<Tool>) -> ListToolsResult {
     let cache = &config.protocol.tools_list_cache;
     ListToolsResult::with_all_items(tools)
         .with_ttl_ms(cache.ttl_ms)
         .with_cache_scope(cache.scope)
+}
+fn discover_result(config: &AppConfig) -> DiscoverResult {
+    DiscoverResult::from_server_info(SUPPORTED_PROTOCOL_VERSIONS.to_vec(), server_info(config))
 }
 fn server_info(config: &AppConfig) -> ServerInfo {
     let capabilities = ServerCapabilities::builder().enable_tools().build();

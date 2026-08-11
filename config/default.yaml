@@ -1,4 +1,4 @@
-# Server identity exposed through MCP initialize responses.
+# Server identity exposed through MCP server/discover responses.
 server:
   name: web # MCP server name.
   instructions: Browsing the Internet # MCP instructions.

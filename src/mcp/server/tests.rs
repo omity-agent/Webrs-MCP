@@ -1,12 +1,24 @@
-use super::{initialize_error, list_tools_result, tool_failure};
+use super::{discover_result, list_tools_result, tool_failure};
 use crate::{config, error::AppError, mcp::schemas};
-use rmcp::model::{CacheScope, ErrorCode};
+use rmcp::model::{CacheScope, ErrorCode, ProtocolVersion};
 #[test]
-fn initialize_reports_the_modern_lifecycle() {
-    let error = initialize_error();
-    assert_eq!(error.code, ErrorCode::METHOD_NOT_FOUND);
-    assert!(error.message.contains("2026-07-28"));
-    assert!(error.message.contains("server/discover"));
+fn server_discovery_advertises_the_modern_contract() {
+    let config = config::load_embedded().unwrap_or_else(|error| panic!("{error}"));
+    let result = discover_result(&config);
+    assert_eq!(
+        result.supported_versions,
+        vec![ProtocolVersion::V_2026_07_28]
+    );
+    let server_info = result
+        .server_info()
+        .unwrap_or_else(|| panic!("server discovery has no server identity"));
+    assert_eq!(server_info.name, "web");
+    assert_eq!(server_info.version, crate::VERSION);
+    assert!(result.capabilities.tools.is_some());
+    assert_eq!(
+        result.instructions.as_deref(),
+        Some("Browsing the Internet")
+    );
 }
 #[test]
 fn tools_list_has_required_cache_fields() {
