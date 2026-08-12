@@ -1,5 +1,5 @@
 use super::{discover_result, list_tools_result, tool_failure};
-use crate::{config, error::AppError, mcp::schemas};
+use crate::{cli::WorkMode, config, error::AppError, mcp::schemas};
 use rmcp::model::{CacheScope, ErrorCode, ProtocolVersion};
 #[test]
 fn server_discovery_advertises_the_modern_contract() {
@@ -23,7 +23,7 @@ fn server_discovery_advertises_the_modern_contract() {
 #[test]
 fn tools_list_has_required_cache_fields() {
     let config = config::load_embedded().unwrap_or_else(|error| panic!("{error}"));
-    let tools = schemas::tools().unwrap_or_else(|error| panic!("{error}"));
+    let tools = schemas::tools(WorkMode::Response).unwrap_or_else(|error| panic!("{error}"));
     let result = list_tools_result(&config, tools);
     assert_eq!(result.ttl_ms, Some(3_600_000));
     assert_eq!(result.cache_scope, Some(CacheScope::Public));

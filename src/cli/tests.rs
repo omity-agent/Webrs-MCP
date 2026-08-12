@@ -1,4 +1,4 @@
-use super::{Cli, Transport};
+use super::{Cli, Transport, WorkMode};
 use clap::Parser as _;
 #[test]
 fn exa_api_key_configures_credentials() {
@@ -16,6 +16,23 @@ fn http_transport_is_default() {
         .runtime_options()
         .unwrap_or_else(|error| panic!("{error}"));
     assert_eq!(options.transport, Transport::Http);
+    assert_eq!(options.mode, WorkMode::Response);
+}
+#[test]
+fn filesystem_mode_requires_stdio() {
+    let cli = Cli::try_parse_from(["web-rs", "--mode", "filesystem"])
+        .unwrap_or_else(|error| panic!("{error}"));
+    let error = cli.runtime_options().unwrap_err().client_message();
+    assert!(error.contains("--transport stdio"));
+}
+#[test]
+fn filesystem_mode_accepts_stdio() {
+    let cli = Cli::try_parse_from(["web-rs", "--transport", "stdio", "--mode", "filesystem"])
+        .unwrap_or_else(|error| panic!("{error}"));
+    let options = cli
+        .runtime_options()
+        .unwrap_or_else(|error| panic!("{error}"));
+    assert_eq!(options.mode, WorkMode::Filesystem);
 }
 #[test]
 fn transport_can_select_stdio() {

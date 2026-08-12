@@ -3,8 +3,8 @@ use crate::{
     Result,
     mcp::server::tool_result,
     models::{
-        FindPage, FindResponse, OpenPage, OpenResponse, OpenResult, SearchQueryResponse,
-        SearchResult,
+        FilesystemResponse, FindPage, FindResponse, OpenPage, OpenResponse, OpenResult,
+        SearchQueryResponse, SearchResult,
     },
 };
 #[test]
@@ -59,6 +59,22 @@ fn search_output_is_raw_unindented_pseudo_xml_and_json() -> Result<()> {
         Some("x < y & z")
     );
     Ok(())
+}
+#[test]
+fn filesystem_output_has_only_the_three_summary_elements() {
+    let output = ToolOutput::Filesystem(FilesystemResponse {
+        output_path: "output/abc123xy".to_owned(),
+        error: String::new(),
+        warning: String::new(),
+    });
+    assert_eq!(
+        output.standard_text(),
+        concat!(
+            "<OUTPUT_PATH>\noutput/abc123xy\n</OUTPUT_PATH>\n",
+            "<ERROR>\n\n</ERROR>\n",
+            "<WARNING>\n\n</WARNING>"
+        )
+    );
 }
 #[test]
 fn open_output_preserves_success_and_failure_shapes() {

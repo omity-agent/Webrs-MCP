@@ -92,6 +92,7 @@ fancy-regex = "*"
 futures = "*"
 http = "*"
 mimalloc = { version = "*", features = ["v3"] }
+nanoid = "*"
 num-traits = "*"
 percent-encoding = "*"
 rand = "*"
@@ -104,8 +105,12 @@ sonic-rs = "*"
 strsim = "*"
 thiserror = "*"
 tiktoken = "*"
-tokio = { version = "*", features = ["macros", "net", "rt-multi-thread", "signal", "sync"] }
+tokio = { version = "*", features = ["fs", "macros", "net", "rt-multi-thread", "signal", "sync"] }
 tracing = "*"
 tracing-subscriber = { version = "*", features = ["env-filter", "fmt"] }
 url = "*"
 urlencoding = "*"
+walkdir = "*"
+
+[dev-dependencies]
+tempfile = "*"

@@ -3,7 +3,7 @@ pub(crate) mod processing;
 pub mod schemas;
 pub mod server;
 pub mod tools;
-use crate::{Result, config::AppConfig};
+use crate::{Result, cli::WorkMode, config::AppConfig};
 use rmcp::transport::{
     StreamableHttpServerConfig,
     streamable_http_server::{session::never::NeverSessionManager, tower::StreamableHttpService},
@@ -22,12 +22,13 @@ pub(crate) fn http_service(config: &AppConfig) -> Result<HttpMcpService> {
 #[inline]
 pub(crate) fn stdio_service(
     config: &AppConfig,
+    mode: WorkMode,
     credentials: tools::ToolCredentials,
 ) -> Result<tools::ToolService> {
     let mut stdio_config = config.clone();
     stdio_config.ssrf.block_private_networks = false;
     stdio_config.ssrf.block_local_hostnames = false;
-    tools::ToolService::new_with_credentials(stdio_config, credentials)
+    tools::ToolService::new_with_credentials(stdio_config, credentials, mode)
 }
 #[must_use]
 pub(crate) fn streamable_http_config(config: &AppConfig) -> StreamableHttpServerConfig {

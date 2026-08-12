@@ -1,3 +1,4 @@
+use super::payload::exa_payload;
 use crate::{
     Result,
     config::{AppConfig, SearchConfig},
@@ -8,42 +9,13 @@ use crate::{
 use chrono::{Days, Utc};
 use futures::future::try_join_all;
 use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 #[derive(Clone)]
 pub struct ExaSearchClient {
     config: SearchConfig,
     timeout_seconds: f64,
     endpoint: String,
     http: SecureHttpClient,
-}
-#[derive(Serialize)]
-struct ExaSearchPayload<'request> {
-    query: &'request str,
-    #[serde(rename = "type")]
-    search_type: &'request str,
-    #[serde(rename = "numResults")]
-    num_results: u32,
-    #[serde(rename = "includeDomains", skip_serializing_if = "Option::is_none")]
-    include_domains: Option<Vec<String>>,
-    #[serde(rename = "startPublishedDate", skip_serializing_if = "Option::is_none")]
-    start_published_date: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    category: Option<&'request str>,
-    contents: ExaContents<'request>,
-}
-#[derive(Serialize)]
-struct ExaContents<'request> {
-    highlights: ExaHighlights<'request>,
-    #[serde(rename = "maxAgeHours")]
-    max_age_hours: u64,
-    #[serde(rename = "livecrawlTimeout")]
-    livecrawl_timeout: u32,
-}
-#[derive(Serialize)]
-struct ExaHighlights<'request> {
-    query: &'request str,
-    #[serde(rename = "maxCharacters")]
-    max_characters: u32,
 }
 #[derive(Deserialize)]
 struct ExaSearchResponse {
@@ -76,20 +48,41 @@ impl ExaSearchClient {
         requests: &[SearchQueryRequest],
         api_key: &str,
     ) -> Result<Vec<SearchResult>> {
+        let grouped = self.search_grouped(requests, api_key, true).await?;
+        Ok(grouped.into_iter().flatten().collect())
+    }
+    pub(crate) async fn search_urls_many(
+        &self,
+        requests: &[SearchQueryRequest],
+        api_key: &str,
+    ) -> Result<Vec<Vec<String>>> {
+        let grouped = self.search_grouped(requests, api_key, false).await?;
+        Ok(grouped
+            .into_iter()
+            .map(|results| results.into_iter().map(|result| result.url).collect())
+            .collect())
+    }
+    async fn search_grouped(
+        &self,
+        requests: &[SearchQueryRequest],
+        api_key: &str,
+        include_highlights: bool,
+    ) -> Result<Vec<Vec<SearchResult>>> {
         let searches = requests
             .iter()
-            .map(|request| self.search_one(request, api_key));
-        let grouped = try_join_all(searches).await?;
-        Ok(grouped.into_iter().flatten().collect())
+            .map(|request| self.search_one(request, api_key, include_highlights));
+        try_join_all(searches).await
     }
     async fn search_one(
         &self,
         request: &SearchQueryRequest,
         api_key: &str,
+        include_highlights: bool,
     ) -> Result<Vec<SearchResult>> {
-        let body = sonic_rs::to_vec(&self.payload(request)).map_err(|error| {
-            AppError::internal(format!("failed to encode Exa request: {error}"))
-        })?;
+        let body = sonic_rs::to_vec(&exa_payload(&self.config, request, include_highlights))
+            .map_err(|error| {
+                AppError::internal(format!("failed to encode Exa request: {error}"))
+            })?;
         let response = self
             .http
             .post(
@@ -109,30 +102,6 @@ impl ExaSearchClient {
             .map_err(|_error| AppError::client("Exa returned malformed JSON."))?;
         Ok(payload.results.into_iter().map(to_search_result).collect())
     }
-    fn payload<'request>(
-        &'request self,
-        request: &'request SearchQueryRequest,
-    ) -> ExaSearchPayload<'request> {
-        ExaSearchPayload {
-            query: &request.q,
-            search_type: &self.config.search_type,
-            num_results: self.config.num_results,
-            include_domains: normalize_domains(request.domains.as_deref()),
-            start_published_date: start_published_date(request.recency),
-            category: request
-                .category
-                .as_ref()
-                .map(crate::models::SearchCategory::as_str),
-            contents: ExaContents {
-                highlights: ExaHighlights {
-                    query: &request.q,
-                    max_characters: self.config.highlights_max_characters,
-                },
-                max_age_hours: self.config.max_age_hours,
-                livecrawl_timeout: self.config.livecrawl_timeout,
-            },
-        }
-    }
     fn headers(api_key: &str) -> Result<HeaderMap> {
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -144,7 +113,7 @@ impl ExaSearchClient {
         Ok(headers)
     }
 }
-fn normalize_domains(domains: Option<&[String]>) -> Option<Vec<String>> {
+pub(super) fn normalize_domains(domains: Option<&[String]>) -> Option<Vec<String>> {
     let normalized: Vec<String> = domains?
         .iter()
         .filter_map(|domain| normalize_domain(domain))
@@ -164,7 +133,7 @@ fn normalize_domain(domain: &str) -> Option<String> {
     let parsed = url::Url::parse(&parse_input).ok()?;
     parsed.host_str().map(str::to_ascii_lowercase)
 }
-fn start_published_date(recency: Option<u64>) -> Option<String> {
+pub(super) fn start_published_date(recency: Option<u64>) -> Option<String> {
     let days = Days::new(recency?);
     Utc::now()
         .checked_sub_days(days)

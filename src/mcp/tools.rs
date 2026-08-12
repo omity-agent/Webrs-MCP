@@ -1,6 +1,7 @@
 use crate::{
     Result,
     arguments::{find_arguments, open_arguments, search_arguments},
+    cli::WorkMode,
     config::AppConfig,
     error::AppError,
     mcp::processing::{find_pages, open_pages},
@@ -8,13 +9,15 @@ use crate::{
     page::{PageFetcher, TokenChunker, reader::ReaderCredentials},
     search::ExaSearchClient,
 };
-use alloc::borrow::Cow;
 use axum::http::HeaderMap;
 use fancy_regex::Regex;
 use sonic_rs::Value;
+mod filesystem;
+mod identity;
 mod render;
 #[cfg(test)]
 mod tests;
+use identity::{reader_credentials, required_api_key};
 pub(crate) use render::ToolOutput;
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ToolCredentials {
@@ -28,25 +31,35 @@ pub struct ToolService {
     chunker: TokenChunker,
     page_fetcher: PageFetcher,
     search: ExaSearchClient,
+    mode: WorkMode,
 }
 impl ToolService {
     #[inline]
     pub fn new(config: AppConfig) -> Result<Self> {
-        Self::new_with_credentials(config, ToolCredentials::default())
+        Self::new_with_credentials(config, ToolCredentials::default(), WorkMode::Response)
     }
     #[inline]
-    pub fn new_with_credentials(config: AppConfig, credentials: ToolCredentials) -> Result<Self> {
+    pub fn new_with_credentials(
+        config: AppConfig,
+        credentials: ToolCredentials,
+        mode: WorkMode,
+    ) -> Result<Self> {
         Ok(Self {
             credentials,
             chunker: TokenChunker::new(&config.chunking)?,
             page_fetcher: PageFetcher::new(config.clone())?,
             search: crate::search::client(&config)?,
             config,
+            mode,
         })
     }
     #[must_use]
     pub(crate) const fn config(&self) -> &AppConfig {
         &self.config
+    }
+    #[must_use]
+    pub(crate) const fn mode(&self) -> WorkMode {
+        self.mode
     }
     pub(crate) async fn call(
         &self,
@@ -54,6 +67,9 @@ impl ToolService {
         arguments: Option<Value>,
         headers: &HeaderMap,
     ) -> Result<ToolOutput> {
+        if self.mode == WorkMode::Filesystem {
+            return Ok(self.filesystem_call(name, arguments, headers).await);
+        }
         match name {
             "search_query" => self.search_query(arguments, headers).await,
             "open" => self.open(arguments, headers).await,
@@ -151,41 +167,4 @@ fn compile_patterns(requests: &[crate::models::FindRequest]) -> Result<Vec<Regex
             })
         })
         .collect()
-}
-fn required_api_key<'key>(
-    headers: &HeaderMap,
-    name: &str,
-    fallback: Option<&'key str>,
-) -> Result<Cow<'key, str>> {
-    if let Some(value) = optional_header(headers, name) {
-        return Ok(Cow::Owned(value));
-    }
-    fallback
-        .filter(|value| !value.is_empty())
-        .map(Cow::Borrowed)
-        .ok_or_else(|| AppError::client(format!("Missing required header: {name}.")))
-}
-fn reader_credentials(
-    headers: &HeaderMap,
-    config: &crate::config::HeaderConfig,
-    fallback: Option<ReaderCredentials>,
-) -> Result<Option<ReaderCredentials>> {
-    let jina = optional_header(headers, &config.jina_api_key);
-    let tinyfish = optional_header(headers, &config.tinyfish_api_key);
-    match (jina, tinyfish) {
-        (Some(_jina), Some(_tinyfish)) => Err(AppError::client(format!(
-            "Provide exactly one remote reader API key header: {} or {}, not both.",
-            config.jina_api_key, config.tinyfish_api_key
-        ))),
-        (Some(api_key), None) => Ok(Some(ReaderCredentials::Jina(api_key))),
-        (None, Some(api_key)) => Ok(Some(ReaderCredentials::TinyFish(api_key))),
-        (None, None) => Ok(fallback),
-    }
-}
-fn optional_header(headers: &HeaderMap, name: &str) -> Option<String> {
-    headers
-        .get(name)
-        .and_then(|value| value.to_str().ok())
-        .filter(|value| !value.is_empty())
-        .map(str::to_owned)
 }

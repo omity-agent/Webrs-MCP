@@ -1,4 +1,5 @@
 pub mod exa;
+mod payload;
 pub type ExaSearchClient = exa::ExaSearchClient;
 use crate::{Result, config::AppConfig};
 #[inline]

@@ -1,6 +1,6 @@
 use crate::{
     Result,
-    cli::Transport,
+    cli::{Transport, WorkMode},
     config::AppConfig,
     mcp::{self, handler::health, http_service, tools::ToolCredentials},
 };
@@ -18,11 +18,15 @@ const HEALTH_PATH: &str = "/health";
 pub async fn run(
     config: AppConfig,
     transport: Transport,
+    mode: WorkMode,
     credentials: ToolCredentials,
 ) -> anyhow::Result<()> {
+    if transport == Transport::Http && mode == WorkMode::Filesystem {
+        anyhow::bail!("filesystem mode can only be used with --transport stdio");
+    }
     match transport {
         Transport::Http => run_http(config).await,
-        Transport::Stdio => run_stdio(config, credentials).await,
+        Transport::Stdio => run_stdio(config, mode, credentials).await,
     }
 }
 async fn run_http(config: AppConfig) -> anyhow::Result<()> {
@@ -37,8 +41,12 @@ async fn run_http(config: AppConfig) -> anyhow::Result<()> {
     clippy::missing_inline_in_public_items,
     reason = "The async server entrypoint performs MCP stdio I/O and is not an inline candidate."
 )]
-pub async fn run_stdio(config: AppConfig, credentials: ToolCredentials) -> anyhow::Result<()> {
-    let service = mcp::stdio_service(&config, credentials)?;
+pub async fn run_stdio(
+    config: AppConfig,
+    mode: WorkMode,
+    credentials: ToolCredentials,
+) -> anyhow::Result<()> {
+    let service = mcp::stdio_service(&config, mode, credentials)?;
     info!("web MCP server listening on stdio");
     let running = serve_directly(service, stdio(), None);
     let quit_reason = running.waiting().await?;

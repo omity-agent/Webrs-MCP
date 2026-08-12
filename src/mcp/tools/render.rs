@@ -2,8 +2,8 @@ use crate::{
     Result,
     error::AppError,
     models::{
-        FindMatch, FindResponse, OpenPage, OpenResponse, OpenResult, SearchQueryResponse,
-        SearchResult,
+        FilesystemResponse, FindMatch, FindResponse, OpenPage, OpenResponse, OpenResult,
+        SearchQueryResponse, SearchResult,
     },
 };
 #[cfg(test)]
@@ -14,6 +14,7 @@ pub(crate) enum ToolOutput {
     Search(SearchQueryResponse),
     Open(OpenResponse),
     Find(FindResponse),
+    Filesystem(FilesystemResponse),
 }
 impl ToolOutput {
     #[expect(
@@ -25,6 +26,7 @@ impl ToolOutput {
             Self::Search(response) => to_value(response),
             Self::Open(response) => to_value(response),
             Self::Find(response) => to_value(response),
+            Self::Filesystem(response) => to_value(response),
         }
     }
     #[must_use]
@@ -37,8 +39,16 @@ impl ToolOutput {
             Self::Search(response) => search_text(response),
             Self::Open(response) => open_text(response),
             Self::Find(response) => find_text(response),
+            Self::Filesystem(response) => filesystem_text(response),
         }
     }
+}
+fn filesystem_text(response: &FilesystemResponse) -> String {
+    let mut xml = PseudoXml::new();
+    xml.text("OUTPUT_PATH", &response.output_path);
+    xml.text("ERROR", &response.error);
+    xml.text("WARNING", &response.warning);
+    xml.finish()
 }
 fn to_value<T>(value: &T) -> Result<rmcp::serde_json::Value>
 where

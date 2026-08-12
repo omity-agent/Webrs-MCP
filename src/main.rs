@@ -8,9 +8,14 @@ async fn main() -> anyhow::Result<()> {
         .context("failed to parse command line")?;
     install_tracing()?;
     let app_config = config::load_embedded().context("failed to load embedded config")?;
-    app::run(app_config, options.transport, options.credentials)
-        .await
-        .context("server failed")?;
+    app::run(
+        app_config,
+        options.transport,
+        options.mode,
+        options.credentials,
+    )
+    .await
+    .context("server failed")?;
     Ok(())
 }
 fn install_tracing() -> anyhow::Result<()> {

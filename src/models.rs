@@ -38,6 +38,7 @@ impl SearchCategory {
     }
 }
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[schemars(deny_unknown_fields)]
 pub struct SearchQueryRequest {
     pub q: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -49,6 +50,12 @@ pub struct SearchQueryRequest {
 }
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 pub struct SearchQueryArguments {
+    pub requests: Vec<SearchQueryRequest>,
+}
+#[derive(Clone, Debug, Deserialize, JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub struct FilesystemSearchArguments {
+    pub output_path: String,
     pub requests: Vec<SearchQueryRequest>,
 }
 #[derive(Clone, Debug, JsonSchema, Serialize)]
@@ -74,6 +81,19 @@ pub struct OpenRequest {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 pub struct OpenArguments {
     pub requests: Vec<OpenRequest>,
+}
+#[derive(Clone, Debug, Deserialize, JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub struct FilesystemOpenArguments {
+    pub output_path: String,
+    pub urls: Vec<String>,
+}
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(deny_unknown_fields)]
+pub struct FilesystemResponse {
+    pub output_path: String,
+    pub error: String,
+    pub warning: String,
 }
 #[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(deny_unknown_fields)]

@@ -1,16 +1,29 @@
 use crate::{
     Result,
+    cli::WorkMode,
     error::AppError,
     models::{
-        FindArguments, FindResponse, OpenArguments, OpenResponse, SearchQueryArguments,
-        SearchQueryResponse,
+        FilesystemOpenArguments, FilesystemResponse, FilesystemSearchArguments, FindArguments,
+        FindResponse, OpenArguments, OpenResponse, SearchQueryArguments, SearchQueryResponse,
     },
 };
 use alloc::sync::Arc;
 use rmcp::model::{JsonObject, Tool};
 use schemars::{JsonSchema, generate::SchemaSettings, schema_for, transform::RestrictFormats};
 #[inline]
-pub fn tools() -> Result<Vec<Tool>> {
+pub fn tools(mode: WorkMode) -> Result<Vec<Tool>> {
+    if mode == WorkMode::Filesystem {
+        return Ok(vec![
+            tool::<FilesystemSearchArguments, FilesystemResponse>(
+                "search_query",
+                "Search for pages.",
+            )?,
+            tool::<FilesystemOpenArguments, FilesystemResponse>(
+                "open",
+                "Fetch the pages.",
+            )?,
+        ]);
+    }
     Ok(vec![
         tool::<SearchQueryArguments, SearchQueryResponse>(
             "search_query",
@@ -24,8 +37,8 @@ pub fn tools() -> Result<Vec<Tool>> {
     ])
 }
 #[inline]
-pub fn tool_by_name(name: &str) -> Result<Option<Tool>> {
-    Ok(tools()?.into_iter().find(|tool| tool.name == name))
+pub fn tool_by_name(mode: WorkMode, name: &str) -> Result<Option<Tool>> {
+    Ok(tools(mode)?.into_iter().find(|tool| tool.name == name))
 }
 fn tool<I, O>(name: &'static str, description: &'static str) -> Result<Tool>
 where

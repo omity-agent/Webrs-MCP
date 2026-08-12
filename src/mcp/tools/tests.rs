@@ -1,4 +1,4 @@
-use super::{reader_credentials, required_api_key};
+use super::identity::{reader_credentials, required_api_key};
 use crate::{Result, config, error::AppError, page::reader::ReaderCredentials};
 use axum::http::{
     HeaderMap, HeaderValue,

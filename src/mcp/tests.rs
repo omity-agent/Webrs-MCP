@@ -1,5 +1,7 @@
 use crate::{
-    VERSION, config,
+    VERSION,
+    cli::WorkMode,
+    config,
     mcp::{
         schemas, stdio_service, streamable_http_config, tools::ToolCredentials, tools::ToolService,
     },
@@ -7,7 +9,7 @@ use crate::{
 use rmcp::{ServerHandler, model::ProtocolVersion};
 #[test]
 fn rmcp_tools_expose_expected_schemas() {
-    let tools = schemas::tools().unwrap_or_else(|error| panic!("{error}"));
+    let tools = schemas::tools(WorkMode::Response).unwrap_or_else(|error| panic!("{error}"));
     let names = tools
         .iter()
         .map(|tool| tool.name.as_ref())
@@ -52,6 +54,34 @@ fn rmcp_tools_expose_expected_schemas() {
         assert_inline_strict_schema(&rmcp::serde_json::Value::Object(
             output_schema.as_ref().clone(),
         ));
+    }
+}
+#[test]
+fn filesystem_mode_exposes_only_file_backed_tools() {
+    let tools = schemas::tools(WorkMode::Filesystem).unwrap_or_else(|error| panic!("{error}"));
+    let names = tools
+        .iter()
+        .map(|tool| tool.name.as_ref())
+        .collect::<Vec<_>>();
+    assert_eq!(names, ["search_query", "open"]);
+    for tool in tools {
+        let properties = tool
+            .input_schema
+            .get("properties")
+            .and_then(rmcp::serde_json::Value::as_object)
+            .unwrap_or_else(|| panic!("{} inputSchema has no properties", tool.name));
+        assert!(properties.contains_key("output_path"));
+        let output = tool
+            .output_schema
+            .unwrap_or_else(|| panic!("{} is missing outputSchema", tool.name));
+        let response_properties = output
+            .get("properties")
+            .and_then(rmcp::serde_json::Value::as_object)
+            .unwrap_or_else(|| panic!("{} outputSchema has no properties", tool.name));
+        assert_eq!(response_properties.len(), 3);
+        assert!(response_properties.contains_key("output_path"));
+        assert!(response_properties.contains_key("error"));
+        assert!(response_properties.contains_key("warning"));
     }
 }
 #[expect(
@@ -122,6 +152,7 @@ fn stdio_service_allows_private_network_urls() {
     let config = config::load_embedded().unwrap_or_else(|error| panic!("{error}"));
     let service = stdio_service(
         &config,
+        WorkMode::Response,
         ToolCredentials {
             exa_api_key: Some("exa-key".to_owned()),
             reader: None,
