@@ -1,9 +1,28 @@
 use crate::{Result, config::DirectFetchConfig, error::AppError};
-use serde::Serialize;
-use sonic_rs::{JsonContainerTrait as _, JsonValueTrait as _, Object, Value};
+use serde::{Deserialize, Serialize};
 use url::Url;
 const API_FILTER: &str = "W-vZ8WEHVi3D2JhQe1m8l90EjOxo6eCsb6b_6yfX0_p";
 const MAX_ANSWERS_PER_REQUEST: &str = "100";
+#[derive(Deserialize)]
+struct StackExchangeResponse {
+    items: Option<Vec<StackExchangeQuestion>>,
+    #[serde(default)]
+    has_more: bool,
+    error_id: Option<i64>,
+    error_name: Option<String>,
+    error_message: Option<String>,
+}
+#[derive(Deserialize)]
+struct StackExchangeQuestion {
+    title: Option<String>,
+    body_markdown: Option<String>,
+    #[serde(default)]
+    answers: Vec<StackExchangeAnswer>,
+}
+#[derive(Deserialize)]
+struct StackExchangeAnswer {
+    body_markdown: Option<String>,
+}
 #[derive(Serialize)]
 struct QuestionAndAnswers {
     question: Question,
@@ -38,29 +57,24 @@ pub fn resolve_stack_overflow_api_url(parsed: &Url, config: &DirectFetchConfig) 
     Some(api.to_string())
 }
 #[inline]
-pub fn format_stack_overflow_question_json(payload: &Value) -> Result<String> {
-    if let Some(message) = api_error_message(payload) {
+pub fn format_stack_overflow_question_json(body: &[u8]) -> Result<String> {
+    let response: StackExchangeResponse = sonic_rs::from_slice(body)
+        .map_err(|_error| AppError::client("Stack Exchange API returned malformed JSON."))?;
+    if let Some(message) = api_error_message(&response) {
         return Err(AppError::client(message));
     }
-    if payload
-        .get("has_more")
-        .and_then(Value::as_bool)
-        .unwrap_or_default()
-    {
+    if response.has_more {
         return Err(AppError::client(
             "Stack Exchange API returned more than 100 answers; direct fetch cannot return a complete answer list.",
         ));
     }
-    let item = single_question_item(payload)?;
-    let question_object = item.as_object().ok_or_else(|| {
-        AppError::client("Stack Exchange API returned an invalid question object.")
-    })?;
+    let item = single_question(response.items)?;
     let output = QuestionAndAnswers {
         question: Question {
-            title: string_field(question_object, "title")?,
-            body: string_field(question_object, "body_markdown")?,
+            title: required_question_field(item.title, "title")?,
+            body: required_question_field(item.body_markdown, "body_markdown")?,
         },
-        answers: answer_bodies(question_object)?,
+        answers: answer_bodies(&item.answers)?,
     };
     sonic_rs::to_string_pretty(&output).map_err(|error| {
         AppError::internal(format!("failed to serialize Stack Overflow JSON: {error}"))
@@ -82,58 +96,43 @@ fn parse_id(value: &str) -> Option<u64> {
     let parsed = value.parse::<u64>().ok()?;
     (parsed > 0).then_some(parsed)
 }
-fn single_question_item(payload: &Value) -> Result<&Value> {
-    let items = payload
-        .get("items")
-        .and_then(Value::as_array)
+fn single_question(items: Option<Vec<StackExchangeQuestion>>) -> Result<StackExchangeQuestion> {
+    let mut questions = items
         .ok_or_else(|| AppError::client("Stack Exchange API response is missing questions."))?;
-    if items.len() != 1 {
+    if questions.len() != 1 {
         return Err(AppError::client(
             "Stack Exchange API did not return exactly one question.",
         ));
     }
-    items
-        .as_slice()
-        .first()
+    questions
+        .pop()
         .ok_or_else(|| AppError::client("Stack Exchange API did not return exactly one question."))
 }
-fn string_field(object: &Object, key: &str) -> Result<String> {
-    object
-        .get(&key)
-        .and_then(Value::as_str)
-        .map(ToOwned::to_owned)
+fn required_question_field(value: Option<String>, key: &str) -> Result<String> {
+    value
+        .map(|content| content.replace("\r\n", "\n"))
         .ok_or_else(|| {
             AppError::client(format!("Stack Exchange API question is missing \"{key}\"."))
         })
 }
-fn answer_bodies(question: &Object) -> Result<Vec<String>> {
-    let Some(answers) = question.get(&"answers") else {
-        return Ok(Vec::new());
-    };
-    let array = answers
-        .as_array()
-        .ok_or_else(|| AppError::client("Stack Exchange API returned invalid answers."))?;
-    array
+fn answer_bodies(answers: &[StackExchangeAnswer]) -> Result<Vec<String>> {
+    answers
         .iter()
         .map(|answer| {
             answer
-                .as_object()
-                .and_then(|object| object.get(&"body_markdown"))
-                .and_then(Value::as_str)
-                .map(ToOwned::to_owned)
+                .body_markdown
+                .clone()
+                .map(|content| content.replace("\r\n", "\n"))
                 .ok_or_else(|| AppError::client("Stack Exchange API returned an invalid answer."))
         })
         .collect()
 }
-fn api_error_message(payload: &Value) -> Option<String> {
-    let error_id = payload.get("error_id").and_then(Value::as_i64)?;
-    let error_name = payload
-        .get("error_name")
-        .and_then(Value::as_str)
-        .unwrap_or("unknown_error");
-    let error_message = payload
-        .get("error_message")
-        .and_then(Value::as_str)
+fn api_error_message(response: &StackExchangeResponse) -> Option<String> {
+    let error_id = response.error_id?;
+    let error_name = response.error_name.as_deref().unwrap_or("unknown_error");
+    let error_message = response
+        .error_message
+        .as_deref()
         .unwrap_or("Stack Exchange API rejected the question request.");
     Some(format!(
         "Stack Exchange API rejected the question request ({error_name}/{error_id}): {error_message}"

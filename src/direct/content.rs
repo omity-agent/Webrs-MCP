@@ -35,22 +35,16 @@ pub fn extract_content(
     ensure_required_content_type(target, headers)?;
     match target.response_format {
         ResponseFormat::Text => Ok(String::from_utf8_lossy(body).into_owned()),
-        ResponseFormat::MediaWikiApi => {
-            let payload = json_payload(body, target.response_format)?;
-            extract_mediawiki_content(&payload)
-        }
+        ResponseFormat::MediaWikiApi => extract_mediawiki_content(body),
         ResponseFormat::PackageRegistryJson => {
-            let payload = json_payload(body, target.response_format)?;
+            let payload = package_registry_payload(body)?;
             format_package_registry_json(
                 &payload,
                 &target.json_fields_first,
                 &target.json_fields_last,
             )
         }
-        ResponseFormat::StackOverflowQuestionJson => {
-            let payload = json_payload(body, target.response_format)?;
-            format_stack_overflow_question_json(&payload)
-        }
+        ResponseFormat::StackOverflowQuestionJson => format_stack_overflow_question_json(body),
     }
 }
 fn ensure_text_content(target: &DirectFetchTarget, body: &[u8]) -> Result<()> {
@@ -61,13 +55,9 @@ fn ensure_text_content(target: &DirectFetchTarget, body: &[u8]) -> Result<()> {
     }
     Err(AppError::client("Direct fetch returned binary content."))
 }
-fn json_payload(body: &[u8], format: ResponseFormat) -> Result<Value> {
-    let mut payload: Value = sonic_rs::from_slice(body).map_err(|_error| {
-        AppError::client(format!(
-            "{} returned malformed JSON.",
-            json_service_name(format)
-        ))
-    })?;
+fn package_registry_payload(body: &[u8]) -> Result<Value> {
+    let mut payload: Value = sonic_rs::from_slice(body)
+        .map_err(|_error| AppError::client("Package registry returned malformed JSON."))?;
     normalize_crlf(&mut payload);
     Ok(payload)
 }
@@ -111,12 +101,4 @@ fn ensure_required_content_type(target: &DirectFetchTarget, headers: &HeaderMap)
     Err(AppError::client(format!(
         "Direct fetch returned Content-Type {content_type}; expected {expected}."
     )))
-}
-const fn json_service_name(format: ResponseFormat) -> &'static str {
-    match format {
-        ResponseFormat::MediaWikiApi => "MediaWiki API",
-        ResponseFormat::PackageRegistryJson => "Package registry",
-        ResponseFormat::StackOverflowQuestionJson => "Stack Exchange API",
-        ResponseFormat::Text => "direct fetch",
-    }
 }

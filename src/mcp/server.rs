@@ -121,15 +121,8 @@ fn sonic_arguments(arguments: Option<JsonObject>) -> Result<Option<Value>, McpEr
         })
 }
 pub(crate) fn tool_result(output: &ToolOutput) -> Result<CallToolResult, McpError> {
-    let structured = output.structured().map_err(to_mcp_error)?;
-    let bytes = sonic_rs::to_vec(&structured).map_err(|error| {
-        McpError::internal_error(format!("failed to encode result: {error}"), None)
-    })?;
-    let json = rmcp::serde_json::from_slice(&bytes).map_err(|error| {
-        McpError::internal_error(format!("failed to bridge result: {error}"), None)
-    })?;
     let mut result = CallToolResult::success(vec![ContentBlock::text(output.standard_text())]);
-    result.structured_content = Some(json);
+    result.structured_content = Some(output.structured().map_err(to_mcp_error)?);
     Ok(result)
 }
 fn tool_failure(error: AppError) -> Result<CallToolResult, McpError> {

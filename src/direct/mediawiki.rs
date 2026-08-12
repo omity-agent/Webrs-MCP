@@ -1,6 +1,39 @@
 use crate::{Result, config::DirectFetchConfig, error::AppError};
-use sonic_rs::{JsonContainerTrait as _, JsonValueTrait as _, Value};
+use serde::{Deserialize, Deserializer, de::IgnoredAny};
 use url::Url;
+#[derive(Deserialize)]
+struct MediaWikiResponse {
+    error: Option<MediaWikiApiError>,
+    query: Option<MediaWikiQuery>,
+}
+#[derive(Deserialize)]
+struct MediaWikiApiError {
+    code: Option<String>,
+}
+#[derive(Deserialize)]
+struct MediaWikiQuery {
+    #[serde(default, deserialize_with = "presence")]
+    badrevids: bool,
+    pages: Option<Vec<MediaWikiPage>>,
+}
+#[derive(Deserialize)]
+struct MediaWikiPage {
+    #[serde(default, deserialize_with = "presence")]
+    missing: bool,
+    revisions: Option<Vec<MediaWikiRevision>>,
+}
+#[derive(Deserialize)]
+struct MediaWikiRevision {
+    slots: Option<MediaWikiSlots>,
+}
+#[derive(Deserialize)]
+struct MediaWikiSlots {
+    main: Option<MediaWikiMainSlot>,
+}
+#[derive(Deserialize)]
+struct MediaWikiMainSlot {
+    content: Option<String>,
+}
 #[must_use]
 #[inline]
 pub fn resolve_mediawiki_api_url(parsed: &Url, config: &DirectFetchConfig) -> Option<String> {
@@ -20,62 +53,52 @@ pub fn resolve_mediawiki_api_url(parsed: &Url, config: &DirectFetchConfig) -> Op
     Some(api.to_string())
 }
 #[inline]
-pub fn extract_mediawiki_content(payload: &Value) -> Result<String> {
-    let object = payload
-        .as_object()
-        .ok_or_else(|| AppError::client("MediaWiki API returned an invalid response object."))?;
-    if let Some(error) = object.get(&"error") {
-        return Err(AppError::client(mediawiki_api_error_message(error)));
+pub fn extract_mediawiki_content(body: &[u8]) -> Result<String> {
+    let response: MediaWikiResponse = sonic_rs::from_slice(body)
+        .map_err(|_error| AppError::client("MediaWiki API returned an invalid response object."))?;
+    if let Some(error) = response.error {
+        let message = error.code.map_or_else(
+            || "MediaWiki API rejected the page request.".to_owned(),
+            |code| format!("MediaWiki API rejected the page request ({code})."),
+        );
+        return Err(AppError::client(message));
     }
-    let query = object
-        .get(&"query")
-        .and_then(Value::as_object)
+    let query = response
+        .query
         .ok_or_else(|| AppError::client("MediaWiki API response is missing query results."))?;
-    if query.get(&"badrevids").is_some() {
+    if query.badrevids {
         return Err(AppError::client("MediaWiki revision was not found."));
     }
     let pages = query
-        .get(&"pages")
-        .and_then(Value::as_array)
+        .pages
         .ok_or_else(|| AppError::client("MediaWiki API did not return exactly one page."))?;
-    if pages.len() != 1 {
-        return Err(AppError::client(
-            "MediaWiki API did not return exactly one page.",
-        ));
-    }
-    let page = pages
-        .as_slice()
-        .first()
-        .ok_or_else(|| AppError::client("MediaWiki API did not return exactly one page."))?;
+    let [page]: [MediaWikiPage; 1] = pages
+        .try_into()
+        .map_err(|_pages| AppError::client("MediaWiki API did not return exactly one page."))?;
     extract_page_content(page)
 }
-fn extract_page_content(page: &Value) -> Result<String> {
-    let page_object = page
-        .as_object()
-        .ok_or_else(|| AppError::client("MediaWiki API returned an invalid page object."))?;
-    if page_object.get(&"missing").is_some() {
+fn extract_page_content(page: MediaWikiPage) -> Result<String> {
+    if page.missing {
         return Err(AppError::client("MediaWiki page was not found."));
     }
-    let revisions = page_object
-        .get(&"revisions")
-        .and_then(Value::as_array)
+    let revisions = page
+        .revisions
         .ok_or_else(|| AppError::client("MediaWiki API response is missing page revisions."))?;
-    if revisions.len() != 1 {
-        return Err(AppError::client(
-            "MediaWiki API response is missing page revisions.",
-        ));
-    }
-    let revision = revisions
-        .as_slice()
-        .first()
-        .ok_or_else(|| AppError::client("MediaWiki API response is missing page revisions."))?;
+    let [revision]: [MediaWikiRevision; 1] = revisions.try_into().map_err(|_revisions| {
+        AppError::client("MediaWiki API response is missing page revisions.")
+    })?;
     revision
-        .get("slots")
-        .and_then(|slots| slots.get("main"))
-        .and_then(|main| main.get("content"))
-        .and_then(|content| content.as_str())
-        .map(str::to_owned)
+        .slots
+        .and_then(|slots| slots.main)
+        .and_then(|main| main.content)
+        .map(|content| content.replace("\r\n", "\n"))
         .ok_or_else(|| AppError::client("MediaWiki API response is missing page content."))
+}
+fn presence<'de, D>(deserializer: D) -> core::result::Result<bool, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    IgnoredAny::deserialize(deserializer).map(|_ignored| true)
 }
 fn wikimedia_selector(parsed: &Url) -> Option<(String, String)> {
     if let Some(title) = parsed.path().strip_prefix("/wiki/") {
@@ -170,10 +193,4 @@ fn percent_decode(value: &str) -> String {
     percent_encoding::percent_decode_str(value)
         .decode_utf8_lossy()
         .into_owned()
-}
-fn mediawiki_api_error_message(error: &Value) -> String {
-    if let Some(code) = error.get("code").and_then(|value| value.as_str()) {
-        return format!("MediaWiki API rejected the page request ({code}).");
-    }
-    "MediaWiki API rejected the page request.".to_owned()
 }

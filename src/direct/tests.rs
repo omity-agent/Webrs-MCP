@@ -1,7 +1,8 @@
 use crate::{
     Result, config,
     direct::{
-        DirectFetchTarget, ResponseFormat, content::extract_content, resolve_direct_fetch_target,
+        DirectFetchTarget, ResponseFormat, content::extract_content,
+        mediawiki::extract_mediawiki_content, resolve_direct_fetch_target,
         stack_overflow::format_stack_overflow_question_json,
     },
 };
@@ -112,8 +113,7 @@ fn stack_overflow_question_resolves_to_api_json() -> Result<()> {
     reason = "The test uses assertions while Result keeps setup failures readable."
 )]
 fn stack_overflow_json_starts_with_question_then_answers_without_comments() -> Result<()> {
-    let payload = sonic_rs::from_str(
-        r#"{
+    let payload = br#"{
             "items": [
                 {
                     "question_id": 1,
@@ -133,14 +133,34 @@ fn stack_overflow_json_starts_with_question_then_answers_without_comments() -> R
                 }
             ],
             "has_more": false
-        }"#,
-    )
-    .map_err(|error| crate::error::AppError::internal(error.to_string()))?;
-    let formatted = format_stack_overflow_question_json(&payload)?;
+        }"#;
+    let formatted = format_stack_overflow_question_json(payload)?;
     assert!(formatted.starts_with("{\n  \"question\""));
     assert!(formatted.contains("\"answers\""));
     assert!(!formatted.contains("comment"));
     Ok(())
+}
+#[test]
+fn stack_overflow_rejects_incomplete_answer_list() {
+    let result = format_stack_overflow_question_json(br#"{"items":[],"has_more":true}"#);
+    match result {
+        Ok(content) => panic!("incomplete answer list should be rejected: {content}"),
+        Err(error) => assert_eq!(
+            error.client_message(),
+            "Stack Exchange API returned more than 100 answers; direct fetch cannot return a complete answer list."
+        ),
+    }
+}
+#[test]
+fn mediawiki_reports_api_error_code() {
+    let result = extract_mediawiki_content(br#"{"error":{"code":"badtitle"}}"#);
+    match result {
+        Ok(content) => panic!("MediaWiki API error should be rejected: {content}"),
+        Err(error) => assert_eq!(
+            error.client_message(),
+            "MediaWiki API rejected the page request (badtitle)."
+        ),
+    }
 }
 #[test]
 #[expect(

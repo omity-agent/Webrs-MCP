@@ -7,7 +7,6 @@ use crate::{
         SearchResult,
     },
 };
-use sonic_rs::JsonValueTrait as _;
 #[test]
 #[expect(
     clippy::panic_in_result_fn,
@@ -39,13 +38,26 @@ fn search_output_is_raw_unindented_pseudo_xml_and_json() -> Result<()> {
         )
     );
     let structured = output.structured()?;
-    assert_eq!(structured["results"][0]["title"], "A&B <C>");
-    assert!(structured["results"][0]["date"].is_null());
     assert_eq!(
-        structured["results"][0]["highlight"],
-        "first line\n<SECOND>raw</SECOND>"
+        structured.pointer("/results/0/title"),
+        Some(&rmcp::serde_json::Value::String("A&B <C>".to_owned()))
     );
-    assert_eq!(structured["warning"][0], "x < y & z");
+    assert_eq!(
+        structured.pointer("/results/0/date"),
+        Some(&rmcp::serde_json::Value::Null)
+    );
+    assert_eq!(
+        structured
+            .pointer("/results/0/highlight")
+            .and_then(rmcp::serde_json::Value::as_str),
+        Some("first line\n<SECOND>raw</SECOND>")
+    );
+    assert_eq!(
+        structured
+            .pointer("/warning/0")
+            .and_then(rmcp::serde_json::Value::as_str),
+        Some("x < y & z")
+    );
     Ok(())
 }
 #[test]

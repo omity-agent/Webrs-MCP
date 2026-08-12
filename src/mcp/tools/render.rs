@@ -6,7 +6,6 @@ use crate::{
         SearchResult,
     },
 };
-use sonic_rs::Value;
 #[cfg(test)]
 mod tests;
 mod writer;
@@ -21,7 +20,7 @@ impl ToolOutput {
         clippy::pattern_type_mismatch,
         reason = "Matching borrowed output variants avoids cloning response models."
     )]
-    pub(crate) fn structured(&self) -> Result<Value> {
+    pub(crate) fn structured(&self) -> Result<rmcp::serde_json::Value> {
         match self {
             Self::Search(response) => to_value(response),
             Self::Open(response) => to_value(response),
@@ -41,11 +40,11 @@ impl ToolOutput {
         }
     }
 }
-fn to_value<T>(value: &T) -> Result<Value>
+fn to_value<T>(value: &T) -> Result<rmcp::serde_json::Value>
 where
     T: serde::Serialize,
 {
-    sonic_rs::to_value(value)
+    rmcp::serde_json::to_value(value)
         .map_err(|error| AppError::internal(format!("failed to encode tool response: {error}")))
 }
 fn search_text(response: &SearchQueryResponse) -> String {
