@@ -55,6 +55,7 @@ pub struct SearchQueryArguments {
 #[derive(Clone, Debug, Deserialize, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct FilesystemSearchArguments {
+    #[schemars(description = "填入一个目录路径。")]
     pub output_path: String,
     pub requests: Vec<SearchQueryRequest>,
 }
@@ -85,6 +86,7 @@ pub struct OpenArguments {
 #[derive(Clone, Debug, Deserialize, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct FilesystemOpenArguments {
+    #[schemars(description = "Directory where the fetched page files will be written.")]
     pub output_path: String,
     pub urls: Vec<String>,
 }

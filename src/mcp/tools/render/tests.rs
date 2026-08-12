@@ -70,7 +70,7 @@ fn filesystem_output_has_only_the_three_summary_elements() {
     assert_eq!(
         output.standard_text(),
         concat!(
-            "<OUTPUT_PATH>\noutput/abc123xy\n</OUTPUT_PATH>\n",
+            "<LOCATION>\noutput/abc123xy\n</LOCATION>\n",
             "<ERROR>\n\n</ERROR>\n",
             "<WARNING>\n\n</WARNING>"
         )

@@ -45,7 +45,7 @@ impl ToolOutput {
 }
 fn filesystem_text(response: &FilesystemResponse) -> String {
     let mut xml = PseudoXml::new();
-    xml.text("OUTPUT_PATH", &response.output_path);
+    xml.text("LOCATION", &response.output_path);
     xml.text("ERROR", &response.error);
     xml.text("WARNING", &response.warning);
     xml.finish()
