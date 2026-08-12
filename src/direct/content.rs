@@ -89,13 +89,17 @@ fn ensure_required_content_type(target: &DirectFetchTarget, headers: &HeaderMap)
             "Direct fetch returned no Content-Type header; expected {expected}."
         )));
     };
-    let actual = content_type
-        .split(';')
-        .next()
-        .unwrap_or_default()
-        .trim()
-        .to_ascii_lowercase();
-    if actual == expected.to_ascii_lowercase() {
+    let actual = content_type.parse::<mime::Mime>().map_err(|error| {
+        AppError::client(format!(
+            "Direct fetch returned invalid Content-Type {content_type}: {error}."
+        ))
+    })?;
+    let expected_mime = expected.parse::<mime::Mime>().map_err(|error| {
+        AppError::internal(format!(
+            "configured direct fetch Content-Type {expected} is invalid: {error}"
+        ))
+    })?;
+    if actual.essence_str() == expected_mime.essence_str() {
         return Ok(());
     }
     Err(AppError::client(format!(

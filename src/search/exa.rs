@@ -8,7 +8,7 @@ use crate::{
 };
 use chrono::{Days, Utc};
 use futures::future::try_join_all;
-use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue};
+use reqwest::header::{HeaderMap, HeaderValue};
 use serde::Deserialize;
 #[derive(Clone)]
 pub struct ExaSearchClient {
@@ -79,16 +79,13 @@ impl ExaSearchClient {
         api_key: &str,
         include_highlights: bool,
     ) -> Result<Vec<SearchResult>> {
-        let body = sonic_rs::to_vec(&exa_payload(&self.config, request, include_highlights))
-            .map_err(|error| {
-                AppError::internal(format!("failed to encode Exa request: {error}"))
-            })?;
+        let request_payload = exa_payload(&self.config, request, include_highlights);
         let response = self
             .http
-            .post(
+            .post_json(
                 &self.endpoint,
                 Self::headers(api_key)?,
-                body,
+                &request_payload,
                 self.timeout_seconds,
             )
             .await?;
@@ -98,9 +95,13 @@ impl ExaSearchClient {
                 response.status.as_u16(),
             ));
         }
-        let payload: ExaSearchResponse = sonic_rs::from_slice(&response.body)
+        let response_payload: ExaSearchResponse = sonic_rs::from_slice(&response.body)
             .map_err(|_error| AppError::client("Exa returned malformed JSON."))?;
-        Ok(payload.results.into_iter().map(to_search_result).collect())
+        Ok(response_payload
+            .results
+            .into_iter()
+            .map(to_search_result)
+            .collect())
     }
     fn headers(api_key: &str) -> Result<HeaderMap> {
         let mut headers = HeaderMap::new();
@@ -109,7 +110,6 @@ impl ExaSearchClient {
             HeaderValue::from_str(api_key)
                 .map_err(|error| AppError::internal(format!("invalid Exa key header: {error}")))?,
         );
-        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
         Ok(headers)
     }
 }

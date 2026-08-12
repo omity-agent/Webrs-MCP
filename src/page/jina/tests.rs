@@ -33,3 +33,31 @@ fn json_content_extracts_plain_object_text() -> Result<()> {
     assert_eq!(extract_content(&headers, &body)?, "plain json text");
     Ok(())
 }
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The test uses assertions while Result keeps content extraction failures readable."
+)]
+fn event_stream_uses_protocol_parser_for_crlf_and_multiline_data() -> Result<()> {
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        CONTENT_TYPE,
+        HeaderValue::from_static("Text/Event-Stream; charset=utf-8"),
+    );
+    let body = concat!(
+        ": keepalive\r\n",
+        "event: result\r\n",
+        "data: {\"data\":{\"markdown\":\"first\"}}\r\n",
+        "\r\n",
+        "data: plain\r\n",
+        "data: fallback\r\n",
+        "\r\n",
+        "data: [DONE]\r\n",
+        "\r\n",
+    );
+    assert_eq!(
+        extract_content(&headers, body.as_bytes())?,
+        "plain\nfallback"
+    );
+    Ok(())
+}

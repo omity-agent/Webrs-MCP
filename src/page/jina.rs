@@ -4,6 +4,7 @@ use crate::{
     error::{AppError, http_service_error},
     net::SecureHttpClient,
 };
+use finesse::{Frame, Parser};
 use reqwest::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue};
 use serde::Serialize;
 use sonic_rs::{JsonContainerTrait as _, JsonValueTrait as _, Value};
@@ -35,15 +36,12 @@ impl JinaReaderClient {
             url: rewrite_arxiv_pdf_url(url, &self.config),
             viewport: &self.config.jina.viewport,
         };
-        let body = sonic_rs::to_vec(&payload).map_err(|error| {
-            AppError::internal(format!("failed to encode Jina request: {error}"))
-        })?;
         let response = self
             .http
-            .post(
+            .post_json(
                 &self.config.jina.endpoint,
                 headers,
-                body,
+                &payload,
                 self.config.http.timeout_seconds,
             )
             .await?;
@@ -62,7 +60,6 @@ impl JinaReaderClient {
             ACCEPT,
             HeaderValue::from_str(&self.config.jina.accept).map_err(header_error)?,
         );
-        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
         insert_header(&mut headers, "X-Engine", &self.config.jina.engine)?;
         insert_header(&mut headers, "X-Locale", &self.config.jina.locale)?;
         insert_header(
@@ -94,16 +91,15 @@ impl JinaReaderClient {
     }
 }
 fn extract_content(headers: &HeaderMap, body: &[u8]) -> Result<String> {
-    let content_type = headers
+    let is_event_stream = headers
         .get(CONTENT_TYPE)
         .and_then(|value| value.to_str().ok())
-        .unwrap_or_default()
-        .split(';')
-        .next()
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    if content_type == "text/event-stream" {
-        return Ok(extract_event_stream_content(&String::from_utf8_lossy(body)));
+        .and_then(|value| value.parse::<mime::Mime>().ok())
+        .is_some_and(|content_type| {
+            content_type.essence_str() == mime::TEXT_EVENT_STREAM.essence_str()
+        });
+    if is_event_stream {
+        return Ok(extract_event_stream_content(body));
     }
     sonic_rs::from_slice::<Value>(body).map_or_else(
         |_error| Ok(String::from_utf8_lossy(body).into_owned()),
@@ -131,29 +127,24 @@ fn extract_payload_content(payload: &Value) -> Option<String> {
     }
     payload.as_str().map(str::to_owned)
 }
-fn extract_event_stream_content(text: &str) -> String {
+fn extract_event_stream_content(body: &[u8]) -> String {
+    let mut parser = Parser::new();
+    parser.feed(body);
+    parser.end();
     let mut latest_content = None;
-    let mut event_lines = Vec::new();
-    for line in text.lines() {
-        if line.is_empty() {
-            latest_content = event_stream_content(latest_content, &event_lines);
-            event_lines.clear();
-        } else if let Some(data) = line.strip_prefix("data:") {
-            event_lines.push(data.strip_prefix(' ').unwrap_or(data).to_owned());
+    while let Some(frame) = parser.next_frame() {
+        if let Frame::Message(message) = frame {
+            latest_content = event_stream_content(latest_content, &message.data);
         }
     }
-    event_stream_content(latest_content, &event_lines).unwrap_or_else(|| text.to_owned())
+    latest_content.unwrap_or_else(|| String::from_utf8_lossy(body).into_owned())
 }
-fn event_stream_content(latest: Option<String>, event_lines: &[String]) -> Option<String> {
-    if event_lines.is_empty() {
-        return latest;
-    }
-    let data = event_lines.join("\n");
+fn event_stream_content(latest: Option<String>, data: &str) -> Option<String> {
     if data == "[DONE]" {
         return latest;
     }
-    let Ok(payload) = sonic_rs::from_str::<Value>(&data) else {
-        return Some(data);
+    let Ok(payload) = sonic_rs::from_str::<Value>(data) else {
+        return Some(data.to_owned());
     };
     extract_payload_content(&payload).or(latest)
 }

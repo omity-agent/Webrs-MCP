@@ -6,7 +6,7 @@ use crate::{
         stack_overflow::format_stack_overflow_question_json,
     },
 };
-use reqwest::header::HeaderMap;
+use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue};
 #[test]
 #[expect(
     clippy::panic_in_result_fn,
@@ -177,5 +177,24 @@ fn json_crlf_line_endings_are_normalized_to_lf() -> Result<()> {
     let content = extract_content(&target, 200, &HeaderMap::new(), body, &config.direct_fetch)?;
     assert!(!content.contains('\r'));
     assert_eq!(content, "line1\nline2\n");
+    Ok(())
+}
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The test uses assertions while Result keeps content extraction failures readable."
+)]
+fn required_content_type_uses_mime_essence() -> Result<()> {
+    let config = config::load_embedded()?;
+    let target = DirectFetchTarget::markdown_accept("https://example.com/page");
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        CONTENT_TYPE,
+        HeaderValue::from_static("Text/Markdown; charset=utf-8"),
+    );
+    assert_eq!(
+        extract_content(&target, 200, &headers, b"# Page", &config.direct_fetch)?,
+        "# Page"
+    );
     Ok(())
 }

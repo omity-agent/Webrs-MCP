@@ -24,6 +24,12 @@ fn unique_local_ipv6_address_is_not_public() {
     ))));
 }
 #[test]
+fn discard_only_ipv6_address_is_not_public() {
+    assert!(!is_public_ip(IpAddr::V6(Ipv6Addr::new(
+        0x0100, 0, 0, 0, 0, 0, 0, 1
+    ))));
+}
+#[test]
 fn ssrf_guard_rejects_private_dns_answers() {
     let guard = blocked_network_guard();
     let blocked = [SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 80)];

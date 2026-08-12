@@ -95,6 +95,5 @@ fn dedup(values: Vec<String>) -> Vec<String> {
     unique
 }
 fn random_missing_suffix() -> String {
-    let value: u128 = rand::random();
-    format!(".{value:032x}")
+    format!(".{}", nanoid::nanoid!())
 }

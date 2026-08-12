@@ -1,6 +1,6 @@
 use crate::{Result, config::AppConfig, error::AppError, net::SecureHttpClient};
 use futures::future::join_all;
-use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue};
+use reqwest::header::{HeaderMap, HeaderValue};
 use serde::Serialize;
 mod response;
 #[cfg(test)]
@@ -65,15 +65,12 @@ impl TinyFishFetchClient {
             format: &self.config.tinyfish.format,
             per_url_timeout_ms: self.config.tinyfish.per_url_timeout_ms,
         };
-        let body = sonic_rs::to_vec(&payload).map_err(|error| {
-            AppError::internal(format!("failed to encode TinyFish request: {error}"))
-        })?;
         let response = self
             .http
-            .post(
+            .post_json(
                 &self.config.tinyfish.endpoint,
                 headers,
-                body,
+                &payload,
                 self.config.http.timeout_seconds,
             )
             .await?;
@@ -89,7 +86,6 @@ fn headers(api_key: &str) -> Result<HeaderMap> {
         "X-API-Key",
         HeaderValue::from_str(api_key).map_err(header_error)?,
     );
-    headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
     Ok(headers)
 }
 #[expect(

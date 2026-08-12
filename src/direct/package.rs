@@ -1,8 +1,14 @@
 use crate::config::DirectFetchConfig;
-use percent_encoding::percent_decode_str;
+use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
 use serde::{Serialize, Serializer, ser::SerializeMap as _};
 use sonic_rs::JsonContainerTrait as _;
 use url::Url;
+const PATH_SEGMENT: AsciiSet = NON_ALPHANUMERIC
+    .remove(b'-')
+    .remove(b'.')
+    .remove(b'_')
+    .remove(b'~');
+const NPM_PATH_SEGMENT: AsciiSet = PATH_SEGMENT.remove(b'@');
 #[derive(Debug)]
 pub struct PackageRegistryTarget {
     pub request_url: String,
@@ -19,7 +25,7 @@ pub fn resolve_package_registry_target(
     let parts = path_parts(parsed);
     if host == "pypi.org" {
         return pypi_name(&parts).map(|name| PackageRegistryTarget {
-            request_url: format!("https://pypi.org/pypi/{}/json", urlencoding::encode(&name)),
+            request_url: format!("https://pypi.org/pypi/{}/json", encode(&name)),
             json_fields_first: Vec::new(),
             json_fields_last: vec!["releases".to_owned()],
         });
@@ -36,10 +42,7 @@ pub fn resolve_package_registry_target(
     }
     if host == "crates.io" {
         return crates_name(&parts).map(|name| PackageRegistryTarget {
-            request_url: format!(
-                "https://crates.io/api/v1/crates/{}",
-                urlencoding::encode(&name)
-            ),
+            request_url: format!("https://crates.io/api/v1/crates/{}", encode(&name)),
             json_fields_first: Vec::new(),
             json_fields_last: vec!["versions".to_owned()],
         });
@@ -181,7 +184,10 @@ fn path_parts(parsed: &Url) -> Vec<String> {
         .unwrap_or_default()
 }
 fn npm_encode(value: &str) -> String {
-    urlencoding::encode(value).replace("%40", "@")
+    utf8_percent_encode(value, &NPM_PATH_SEGMENT).to_string()
+}
+fn encode(value: &str) -> impl core::fmt::Display + '_ {
+    utf8_percent_encode(value, &PATH_SEGMENT)
 }
 fn contains(values: &[String], value: &str) -> bool {
     values

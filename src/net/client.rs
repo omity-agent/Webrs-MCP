@@ -7,12 +7,15 @@ use alloc::sync::Arc;
 use axum::body::Bytes;
 use core::num::NonZeroUsize;
 use core::time::Duration;
+use redirect::redirect_target;
 use reqwest::{
     Method, StatusCode, Url,
-    header::{HeaderMap, HeaderValue, LOCATION},
+    header::{CONTENT_TYPE, HeaderMap, HeaderValue, LOCATION},
     redirect::Policy,
 };
+use serde::Serialize;
 use tokio::sync::Semaphore;
+mod redirect;
 #[derive(Clone)]
 pub struct SecureHttpClient {
     client: reqwest::Client,
@@ -102,15 +105,22 @@ impl SecureHttpClient {
         clippy::missing_inline_in_public_items,
         reason = "HTTP POST performs async network I/O and is not an inline candidate."
     )]
-    pub async fn post(
+    pub async fn post_json<Payload>(
         &self,
         url: &str,
-        headers: HeaderMap,
-        body: Vec<u8>,
+        mut headers: HeaderMap,
+        payload: &Payload,
         timeout_seconds: f64,
-    ) -> Result<FetchResponse> {
+    ) -> Result<FetchResponse>
+    where
+        Payload: Serialize + Sync,
+    {
         let parsed =
             Url::parse(url).map_err(|error| AppError::client(format!("Invalid URL: {error}")))?;
+        let body = sonic_rs::to_vec(payload).map_err(|error| {
+            AppError::internal(format!("failed to encode HTTP JSON request: {error}"))
+        })?;
+        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
         let _permit = self.requests.acquire().await.map_err(|error| {
             AppError::internal(format!(
                 "HTTP request concurrency limiter was closed: {error}"
@@ -164,17 +174,6 @@ impl SecureHttpClient {
         }
         Err(AppError::internal("redirect loop exited unexpectedly"))
     }
-}
-fn redirect_target(location: Option<&HeaderValue>, base: &Url) -> Result<Option<Url>> {
-    let Some(raw) = location else {
-        return Ok(None);
-    };
-    let value = raw
-        .to_str()
-        .map_err(|_error| AppError::client("Redirect location is not valid UTF-8."))?;
-    base.join(value)
-        .map(Some)
-        .map_err(|error| AppError::client(format!("Redirect location is invalid: {error}")))
 }
 async fn collect_response(
     response: reqwest::Response,

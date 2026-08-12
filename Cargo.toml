@@ -89,14 +89,16 @@ chrono = { version = "*", default-features = false, features = ["clock", "std"] 
 clap = { version = "*", features = ["derive"] }
 content_inspector = "*"
 fancy-regex = "*"
+finesse = "*"
 futures = "*"
 http = "*"
+http-acl = "*"
+mime = "*"
 mimalloc = { version = "*", features = ["v3"] }
 nanoid = "*"
 num-traits = "*"
 path-slash = "*"
 percent-encoding = "*"
-rand = "*"
 reqwest = { version = "*", default-features = false, features = ["deflate", "gzip", "json", "rustls-tls"] }
 rmcp = { version = "*", features = ["macros", "schemars", "server", "transport-io", "transport-streamable-http-server"] }
 schemars = { version = "*", features = ["derive"] }
@@ -110,7 +112,6 @@ tokio = { version = "*", features = ["fs", "macros", "net", "rt-multi-thread", "
 tracing = "*"
 tracing-subscriber = { version = "*", features = ["env-filter", "fmt"] }
 url = "*"
-urlencoding = "*"
 walkdir = "*"
 
 [dev-dependencies]

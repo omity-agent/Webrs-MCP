@@ -1,7 +1,11 @@
 use crate::{Result, config::SsrfConfig, error::AppError};
-use core::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use core::net::{IpAddr, SocketAddr};
+use http_acl::HttpAcl;
+use std::sync::LazyLock;
 use tokio::net::lookup_host;
 use url::{Host, Url};
+static PUBLIC_NETWORK_ACL: LazyLock<HttpAcl> =
+    LazyLock::new(|| HttpAcl::builder().ip_acl_default(true).build());
 #[derive(Clone, Debug)]
 pub struct SsrfGuard {
     config: SsrfConfig,
@@ -87,37 +91,7 @@ impl SsrfGuard {
 #[inline]
 #[must_use]
 pub fn is_public_ip(address: IpAddr) -> bool {
-    match address {
-        IpAddr::V4(ip) => is_public_ipv4(ip),
-        IpAddr::V6(ip) => is_public_ipv6(ip),
-    }
-}
-fn is_public_ipv4(ip: Ipv4Addr) -> bool {
-    let octets = ip.octets();
-    !(ip.is_private()
-        || ip.is_loopback()
-        || ip.is_link_local()
-        || ip.is_multicast()
-        || ip.is_broadcast()
-        || ip.is_documentation()
-        || ip.is_unspecified()
-        || octets[0] == 0
-        || octets[0] >= 240
-        || (octets[0] == 100 && (64..=127).contains(&octets[1]))
-        || (octets[0] == 198 && matches!(octets[1], 18 | 19))
-        || (octets[0] == 192 && octets[1] == 0 && octets[2] == 0))
-}
-fn is_public_ipv6(ip: Ipv6Addr) -> bool {
-    if let Some(mapped) = ip.to_ipv4_mapped() {
-        return is_public_ipv4(mapped);
-    }
-    let segments = ip.segments();
-    !(ip.is_loopback()
-        || ip.is_unspecified()
-        || ip.is_multicast()
-        || (segments[0] & 0xfe00) == 0xfc00
-        || (segments[0] & 0xffc0) == 0xfe80
-        || (segments[0] == 0x2001 && segments[1] == 0x0db8))
+    !address.is_multicast() && PUBLIC_NETWORK_ACL.is_ip_allowed(&address).is_allowed()
 }
 #[expect(
     clippy::case_sensitive_file_extension_comparisons,
