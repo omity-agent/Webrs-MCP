@@ -9,6 +9,7 @@ use crate::{
     net::{SecureHttpClient, SsrfGuard, guard, secure_client_from_config},
     page::reader::{PageReader, ReaderCredentials},
 };
+use alloc::sync::Arc;
 use futures::{StreamExt as _, stream::FuturesUnordered};
 use std::collections::HashMap;
 use targets::direct_fetch_targets;
@@ -22,7 +23,7 @@ mod tests;
 pub struct PageContent {
     pub url: String,
     pub source: PageSource,
-    pub markdown: String,
+    pub markdown: Arc<str>,
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[expect(
@@ -72,7 +73,7 @@ impl PageFetcher {
         Ok(PageContent {
             url: url.to_owned(),
             source: PageSource::Reader,
-            markdown,
+            markdown: markdown.into(),
         })
     }
     async fn fetch_direct(&self, url: &str) -> Result<Option<PageContent>> {
@@ -119,7 +120,7 @@ impl PageFetcher {
                     return Ok(Some(PageContent {
                         url: url.to_owned(),
                         source: PageSource::Direct,
-                        markdown,
+                        markdown: markdown.into(),
                     }));
                 }
                 Err(error) => errors.push((request_url, error)),

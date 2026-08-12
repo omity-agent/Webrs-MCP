@@ -36,6 +36,7 @@ http:
   timeout_seconds: 120.0 # Search and remote reader timeout.
   direct_fetch_timeout_seconds: 20.0 # Direct fetch timeout.
   max_redirects: 5 # Redirect hops after per-hop SSRF validation.
+  max_concurrent_requests: 8 # Maximum concurrent outbound requests per shared HTTP client.
 
 # Jina Reader API behavior.
 jina:
@@ -65,6 +66,7 @@ chunking:
   tokenizer: o200k_base # Tokenizer name.
   chunk_tokens: 4000 # Maximum tokens in one chunk.
   overlap_ratio: 0.1 # Chunk overlap ratio.
+  max_concurrent_tasks: 4 # Maximum concurrent blocking chunking and regex tasks.
 
 # Regex find behavior.
 find:

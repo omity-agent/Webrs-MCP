@@ -1,6 +1,7 @@
 use super::{PageContent, PageFetcher, PageSource};
 use crate::{Result, error::AppError, page::reader::ReaderCredentials};
 use futures::future::join_all;
+use std::collections::HashMap;
 #[cfg(test)]
 mod tests;
 impl PageFetcher {
@@ -22,15 +23,26 @@ impl PageFetcher {
         clippy::missing_inline_in_public_items,
         reason = "Partial batch fetching coordinates independent async work and retains per-request errors."
     )]
-    #[expect(
-        clippy::pattern_type_mismatch,
-        reason = "Matching borrowed reader credentials selects the TinyFish batch path without cloning API keys."
-    )]
     pub async fn fetch_many_partial(
         &self,
         urls: &[String],
         credentials: Option<&ReaderCredentials>,
     ) -> Vec<Result<PageContent>> {
+        let batch = UrlBatch::new(urls);
+        let unique_results = self
+            .fetch_unique_many_partial(&batch.unique, credentials)
+            .await;
+        batch.expand(&unique_results)
+    }
+    async fn fetch_unique_many_partial(
+        &self,
+        urls: &[String],
+        credentials: Option<&ReaderCredentials>,
+    ) -> Vec<Result<PageContent>> {
+        #[expect(
+            clippy::pattern_type_mismatch,
+            reason = "Matching borrowed reader credentials selects the TinyFish batch path without cloning API keys."
+        )]
         match credentials {
             Some(reader_credentials @ ReaderCredentials::TinyFish(_)) => {
                 self.fetch_many_tinyfish(urls, reader_credentials).await
@@ -76,7 +88,7 @@ fn merge_reader_pages(
             result.map(|markdown| PageContent {
                 url,
                 source: PageSource::Reader,
-                markdown,
+                markdown: markdown.into(),
             })
         });
     direct_pages
@@ -112,6 +124,37 @@ fn finish_direct_pages(direct_pages: Vec<Result<Option<PageContent>>>) -> Vec<Re
             page.ok_or_else(|| AppError::internal("page fetch result was missing"))
         })
         .collect()
+}
+struct UrlBatch {
+    unique: Vec<String>,
+    order: Vec<usize>,
+}
+impl UrlBatch {
+    fn new(urls: &[String]) -> Self {
+        let mut indexes = HashMap::with_capacity(urls.len());
+        let mut unique = Vec::with_capacity(urls.len());
+        let mut order = Vec::with_capacity(urls.len());
+        for url in urls {
+            let index = indexes.get(url.as_str()).copied().unwrap_or_else(|| {
+                let next_index = unique.len();
+                indexes.insert(url.as_str(), next_index);
+                unique.push(url.clone());
+                next_index
+            });
+            order.push(index);
+        }
+        Self { unique, order }
+    }
+    fn expand(&self, unique_results: &[Result<PageContent>]) -> Vec<Result<PageContent>> {
+        self.order
+            .iter()
+            .map(|index| {
+                unique_results.get(*index).cloned().unwrap_or_else(|| {
+                    Err(AppError::internal("unique page fetch result was missing"))
+                })
+            })
+            .collect()
+    }
 }
 fn repeat_error<Item>(count: usize, error: &AppError) -> Vec<Result<Item>> {
     core::iter::repeat_with(|| Err(error.clone()))

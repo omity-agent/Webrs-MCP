@@ -15,6 +15,7 @@ fn chunker_splits_with_overlap_and_limits_snippet() -> Result<()> {
         tokenizer: "o200k_base".to_owned(),
         chunk_tokens: 10,
         overlap_ratio: 0.2_f64,
+        max_concurrent_tasks: 1,
     })?;
     let text = (0_usize..40_usize)
         .map(|index| format!("word{index}"))
@@ -37,11 +38,12 @@ fn open_out_of_range_chunk_uses_first_chunk() -> Result<()> {
         tokenizer: "o200k_base".to_owned(),
         chunk_tokens: 100,
         overlap_ratio: 0.1_f64,
+        max_concurrent_tasks: 1,
     })?;
     let page = PageContent {
         url: "https://example.com".to_owned(),
         source: PageSource::Direct,
-        markdown: "alpha beta gamma".to_owned(),
+        markdown: "alpha beta gamma".into(),
     };
     let mut warnings = Vec::new();
     let opened: OpenPage = open_page_chunk(&page, 2, 0, &chunker, &mut warnings)?;
@@ -62,11 +64,12 @@ fn find_supports_fancy_regex_lookahead() -> Result<()> {
         tokenizer: "o200k_base".to_owned(),
         chunk_tokens: 100,
         overlap_ratio: 0.1_f64,
+        max_concurrent_tasks: 1,
     })?;
     let page = PageContent {
         url: "https://example.com".to_owned(),
         source: PageSource::Direct,
-        markdown: "so fancy! even with! iterators!".to_owned(),
+        markdown: "so fancy! even with! iterators!".into(),
     };
     let regex = fancy_regex::Regex::new(r"\w+(?=!)")
         .map_err(|error| AppError::client(error.to_string()))?;

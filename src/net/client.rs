@@ -4,28 +4,39 @@ use crate::{
     net::{SsrfGuard, body, resolver::GuardedResolver},
 };
 use alloc::sync::Arc;
+use axum::body::Bytes;
+use core::num::NonZeroUsize;
 use core::time::Duration;
 use reqwest::{
     Method, StatusCode, Url,
     header::{HeaderMap, HeaderValue, LOCATION},
     redirect::Policy,
 };
+use tokio::sync::Semaphore;
 #[derive(Clone)]
 pub struct SecureHttpClient {
     client: reqwest::Client,
     guard: SsrfGuard,
     max_redirects: usize,
+    requests: Arc<Semaphore>,
     user_agent: HeaderValue,
 }
 #[derive(Clone, Debug)]
 pub struct FetchResponse {
     pub status: StatusCode,
     pub headers: HeaderMap,
-    pub body: Vec<u8>,
+    pub body: Bytes,
 }
 impl SecureHttpClient {
     #[inline]
-    pub fn new(max_redirects: usize, user_agent: &str, guard: SsrfGuard) -> Result<Self> {
+    pub fn new(
+        max_redirects: usize,
+        max_concurrent_requests: usize,
+        user_agent: &str,
+        guard: SsrfGuard,
+    ) -> Result<Self> {
+        let request_limit = NonZeroUsize::new(max_concurrent_requests)
+            .ok_or_else(|| AppError::config("http.max_concurrent_requests must be positive"))?;
         let user_agent_header = HeaderValue::from_str(user_agent)
             .map_err(|error| AppError::config(format!("http.user_agent: {error}")))?;
         let client = reqwest::Client::builder()
@@ -40,6 +51,7 @@ impl SecureHttpClient {
             client,
             guard,
             max_redirects,
+            requests: Arc::new(Semaphore::new(request_limit.get())),
             user_agent: user_agent_header,
         })
     }
@@ -99,6 +111,11 @@ impl SecureHttpClient {
     ) -> Result<FetchResponse> {
         let parsed =
             Url::parse(url).map_err(|error| AppError::client(format!("Invalid URL: {error}")))?;
+        let _permit = self.requests.acquire().await.map_err(|error| {
+            AppError::internal(format!(
+                "HTTP request concurrency limiter was closed: {error}"
+            ))
+        })?;
         self.guard.validate_url(&parsed).await?;
         let response = self
             .client
@@ -119,6 +136,11 @@ impl SecureHttpClient {
         timeout_seconds: f64,
         body_limit: Option<usize>,
     ) -> Result<FetchResponse> {
+        let _permit = self.requests.acquire().await.map_err(|error| {
+            AppError::internal(format!(
+                "HTTP request concurrency limiter was closed: {error}"
+            ))
+        })?;
         for redirect_index in 0..=self.max_redirects {
             self.guard.validate_url(&url).await?;
             let response = self

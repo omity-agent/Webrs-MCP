@@ -96,7 +96,7 @@ mod tests {
         let response = FetchResponse {
             status: StatusCode::OK,
             headers: HeaderMap::new(),
-            body: b"generated missing page".to_vec(),
+            body: axum::body::Bytes::from_static(b"generated missing page"),
         };
         let error = extract_direct_content(
             &target,

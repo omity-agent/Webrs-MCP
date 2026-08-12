@@ -1,4 +1,5 @@
 use crate::{Result, config::ChunkingConfig, error::AppError};
+use core::num::NonZeroUsize;
 use num_traits::ToPrimitive as _;
 use tiktoken::CoreBpe;
 #[derive(Clone, Debug)]
@@ -10,6 +11,7 @@ pub struct TextChunk {
 pub struct TokenChunker {
     encoder: &'static CoreBpe,
     chunk_tokens: usize,
+    max_concurrent_tasks: NonZeroUsize,
     overlap_tokens: usize,
 }
 impl TokenChunker {
@@ -17,11 +19,19 @@ impl TokenChunker {
     pub fn new(config: &ChunkingConfig) -> Result<Self> {
         let encoder = tiktoken::get_encoding(&config.tokenizer)
             .ok_or_else(|| AppError::config(format!("unknown tokenizer: {}", config.tokenizer)))?;
+        let max_concurrent_tasks = NonZeroUsize::new(config.max_concurrent_tasks)
+            .ok_or_else(|| AppError::config("chunking.max_concurrent_tasks must be positive"))?;
         Ok(Self {
             encoder,
             chunk_tokens: config.chunk_tokens,
+            max_concurrent_tasks,
             overlap_tokens: overlap_tokens(config)?,
         })
+    }
+    #[inline]
+    #[must_use]
+    pub const fn max_concurrent_tasks(&self) -> usize {
+        self.max_concurrent_tasks.get()
     }
     #[inline]
     #[must_use]

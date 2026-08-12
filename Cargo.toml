@@ -39,6 +39,7 @@ single_call_fn = "allow"
 too_many_arguments = "allow"
 too_many_lines = "allow"
 undocumented_unsafe_blocks = "allow"
+unneeded_field_pattern = "allow"
 unwrap_used = "allow"
 wildcard_dependencies = "allow"
 
@@ -103,7 +104,7 @@ sonic-rs = "*"
 strsim = "*"
 thiserror = "*"
 tiktoken = "*"
-tokio = { version = "*", features = ["macros", "net", "rt-multi-thread", "signal"] }
+tokio = { version = "*", features = ["macros", "net", "rt-multi-thread", "signal", "sync"] }
 tracing = "*"
 tracing-subscriber = { version = "*", features = ["env-filter", "fmt"] }
 url = "*"

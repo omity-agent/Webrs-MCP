@@ -37,6 +37,7 @@ pub struct HttpConfig {
     pub timeout_seconds: f64,
     pub direct_fetch_timeout_seconds: f64,
     pub max_redirects: usize,
+    pub max_concurrent_requests: usize,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -73,6 +74,7 @@ pub struct ChunkingConfig {
     pub tokenizer: String,
     pub chunk_tokens: usize,
     pub overlap_ratio: f64,
+    pub max_concurrent_tasks: usize,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -129,6 +131,10 @@ impl AppConfig {
         validation::positive(&self.search.livecrawl_timeout, "search.livecrawl_timeout")?;
         validation::positive(&self.chunking.chunk_tokens, "chunking.chunk_tokens")?;
         validation::positive(
+            &self.chunking.max_concurrent_tasks,
+            "chunking.max_concurrent_tasks",
+        )?;
+        validation::positive(
             &self.find.default_snippet_tokens,
             "find.default_snippet_tokens",
         )?;
@@ -142,6 +148,10 @@ impl AppConfig {
         validation::positive_float(
             self.http.direct_fetch_timeout_seconds,
             "http.direct_fetch_timeout_seconds",
+        )?;
+        validation::positive(
+            &self.http.max_concurrent_requests,
+            "http.max_concurrent_requests",
         )?;
         if !(0.0_f64..1.0_f64).contains(&self.chunking.overlap_ratio) {
             return Err(AppError::config(

@@ -6,7 +6,7 @@ use crate::{
     page::{PageContent, TokenChunker, find_in_page, open_page_chunk},
 };
 use fancy_regex::Regex;
-use futures::future::{join_all, try_join_all};
+use futures::{StreamExt as _, stream};
 #[cfg(test)]
 mod tests;
 pub(crate) async fn open_pages(
@@ -16,31 +16,45 @@ pub(crate) async fn open_pages(
     mut warnings: Vec<String>,
 ) -> OpenResponse {
     let mut fetched_pages = pages.into_iter();
-    let tasks = requests.iter().enumerate().map(|(request_index, request)| {
-        let fetched = fetched_pages
-            .next()
-            .unwrap_or_else(|| Err(AppError::internal("page fetch result was missing")));
-        let page_chunker = chunker.clone();
-        let chunk_index = request.chunk;
-        let task_url = request.url.clone();
-        let result_url = task_url.clone();
-        async move {
-            let task = tokio::task::spawn_blocking(move || {
-                process_open_result(task_url, fetched, chunk_index, request_index, &page_chunker)
-            });
-            task.await.unwrap_or_else(|error| {
-                (
-                    OpenResult::Failure {
-                        url: result_url,
-                        error: AppError::internal(format!("page processing task failed: {error}"))
+    let max_concurrent_tasks = chunker.max_concurrent_tasks();
+    let tasks = requests.iter().cloned().enumerate().map(
+        |(request_index, request): (usize, OpenRequest)| {
+            let fetched = fetched_pages
+                .next()
+                .unwrap_or_else(|| Err(AppError::internal("page fetch result was missing")));
+            let page_chunker = chunker.clone();
+            let chunk_index = request.chunk;
+            let result_url = request.url.clone();
+            let task_url = request.url;
+            async move {
+                let task = tokio::task::spawn_blocking(move || {
+                    process_open_result(
+                        task_url,
+                        fetched,
+                        chunk_index,
+                        request_index,
+                        &page_chunker,
+                    )
+                });
+                task.await.unwrap_or_else(|error| {
+                    (
+                        OpenResult::Failure {
+                            url: result_url,
+                            error: AppError::internal(format!(
+                                "page processing task failed: {error}"
+                            ))
                             .client_message(),
-                    },
-                    Vec::new(),
-                )
-            })
-        }
-    });
-    let joined = join_all(tasks).await;
+                        },
+                        Vec::new(),
+                    )
+                })
+            }
+        },
+    );
+    let joined = stream::iter(tasks)
+        .buffered(max_concurrent_tasks)
+        .collect::<Vec<_>>()
+        .await;
     let mut results = Vec::with_capacity(joined.len());
     for (result, page_warnings) in joined {
         results.push(result);
@@ -80,31 +94,44 @@ pub(crate) async fn find_pages(
     chunk_tokens: usize,
     mut warnings: Vec<String>,
 ) -> Result<FindResponse> {
-    let tasks = requests.iter().zip(pages).zip(patterns).enumerate().map(
-        |(request_index, ((request, page), pattern))| {
-            let page_chunker = chunker.clone();
-            let find_config = config.clone();
-            let requested_snippet_tokens = request.snippet_tokens;
-            tokio::task::spawn_blocking(move || {
-                let mut page_warnings = Vec::new();
-                let snippet_tokens = snippet_tokens_for_request(
-                    requested_snippet_tokens,
-                    request_index,
-                    &mut page_warnings,
-                    chunk_tokens,
-                    find_config.default_snippet_tokens,
-                );
-                let found =
-                    find_in_page(&page, &pattern, snippet_tokens, &page_chunker, &find_config)?;
-                Ok::<(FindPage, Vec<String>), AppError>((found, page_warnings))
-            })
-        },
-    );
-    let joined = try_join_all(tasks)
-        .await
-        .map_err(|error| AppError::internal(format!("page processing task failed: {error}")))?;
+    let max_concurrent_tasks = chunker.max_concurrent_tasks();
+    let tasks = requests
+        .iter()
+        .cloned()
+        .zip(pages)
+        .zip(patterns)
+        .enumerate()
+        .map(
+            |(request_index, ((request, page), pattern)): (
+                usize,
+                ((FindRequest, PageContent), Regex),
+            )| {
+                let page_chunker = chunker.clone();
+                let find_config = config.clone();
+                let requested_snippet_tokens = request.snippet_tokens;
+                tokio::task::spawn_blocking(move || {
+                    let mut page_warnings = Vec::new();
+                    let snippet_tokens = snippet_tokens_for_request(
+                        requested_snippet_tokens,
+                        request_index,
+                        &mut page_warnings,
+                        chunk_tokens,
+                        find_config.default_snippet_tokens,
+                    );
+                    let found =
+                        find_in_page(&page, &pattern, snippet_tokens, &page_chunker, &find_config)?;
+                    Ok::<(FindPage, Vec<String>), AppError>((found, page_warnings))
+                })
+            },
+        );
+    let joined = stream::iter(tasks)
+        .buffered(max_concurrent_tasks)
+        .collect::<Vec<_>>()
+        .await;
     let mut found = Vec::with_capacity(joined.len());
-    for result in joined {
+    for task in joined {
+        let result = task
+            .map_err(|error| AppError::internal(format!("page processing task failed: {error}")))?;
         let (page, page_warnings) = result?;
         found.push(page);
         warnings.extend(page_warnings);

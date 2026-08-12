@@ -26,7 +26,7 @@ async fn open_returns_successes_alongside_per_request_errors() -> Result<()> {
         Ok(PageContent {
             url: "https://example.com/a".to_owned(),
             source: PageSource::Direct,
-            markdown: "successful page".to_owned(),
+            markdown: "successful page".into(),
         }),
         Err(AppError::client("page fetch failed")),
     ];
@@ -34,6 +34,7 @@ async fn open_returns_successes_alongside_per_request_errors() -> Result<()> {
         tokenizer: "o200k_base".to_owned(),
         chunk_tokens: 100,
         overlap_ratio: 0.1_f64,
+        max_concurrent_tasks: 1,
     })?;
     let response = open_pages(&requests, fetched, chunker, Vec::new()).await;
     assert_eq!(response.results.len(), 2);

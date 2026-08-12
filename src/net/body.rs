@@ -1,20 +1,21 @@
 use crate::{Result, error::AppError};
+use axum::body::Bytes;
 pub(crate) async fn collect(
     mut response: reqwest::Response,
     limit: Option<usize>,
-) -> Result<Vec<u8>> {
+) -> Result<Bytes> {
     match limit {
         Some(max_bytes) => collect_limited(&mut response, max_bytes).await,
-        None => Ok(response.bytes().await?.to_vec()),
+        None => Ok(response.bytes().await?),
     }
 }
-async fn collect_limited(response: &mut reqwest::Response, max_bytes: usize) -> Result<Vec<u8>> {
+async fn collect_limited(response: &mut reqwest::Response, max_bytes: usize) -> Result<Bytes> {
     reject_declared_oversize(response, max_bytes)?;
     let mut body = Vec::new();
     while let Some(chunk) = response.chunk().await? {
         append_chunk(&mut body, &chunk, max_bytes)?;
     }
-    Ok(body)
+    Ok(body.into())
 }
 fn reject_declared_oversize(response: &reqwest::Response, max_bytes: usize) -> Result<()> {
     let Some(content_length) = response.content_length() else {

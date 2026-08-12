@@ -15,6 +15,7 @@ use crate::{
 pub fn secure_client(http: &HttpConfig, ssrf: &SsrfConfig) -> Result<SecureHttpClient> {
     SecureHttpClient::new(
         http.max_redirects,
+        http.max_concurrent_requests,
         &http.user_agent,
         SsrfGuard::new(ssrf.clone()),
     )
