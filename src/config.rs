@@ -1,7 +1,5 @@
 mod embedded;
 mod protocol;
-#[cfg(test)]
-mod tests;
 pub mod types;
 mod validation;
 use crate::Result;

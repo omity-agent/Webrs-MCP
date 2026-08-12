@@ -50,3 +50,24 @@ pub fn path_prefix(value: &str, path: &str) -> Result<()> {
     }
     Err(AppError::config(format!("{path} must start with /")))
 }
+pub fn tinyfish(config: &crate::config::TinyFishConfig) -> Result<()> {
+    positive(
+        &config.max_urls_per_request,
+        "tinyfish.max_urls_per_request",
+    )?;
+    if config.max_urls_per_request > 10 {
+        return Err(AppError::config(
+            "tinyfish.max_urls_per_request must be <= 10",
+        ));
+    }
+    positive(&config.per_url_timeout_ms, "tinyfish.per_url_timeout_ms")?;
+    if config.per_url_timeout_ms > 110_000 {
+        return Err(AppError::config(
+            "tinyfish.per_url_timeout_ms must be <= 110000",
+        ));
+    }
+    if config.format != "markdown" {
+        return Err(AppError::config("tinyfish.format must be markdown"));
+    }
+    Ok(())
+}

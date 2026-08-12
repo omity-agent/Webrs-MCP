@@ -33,6 +33,7 @@ async fn invocation_uses_base36_id_and_copies_cached_page() -> Result<()> {
         .write_page(std::path::Path::new("0"), "https://example.com/", &page)
         .await?;
     let first_response = first.response(None);
+    assert!(!first_response.output_path.contains('\\'));
     let id = std::path::Path::new(&first_response.output_path)
         .file_name()
         .and_then(std::ffi::OsStr::to_str)

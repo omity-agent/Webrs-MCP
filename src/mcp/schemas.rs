@@ -18,10 +18,7 @@ pub fn tools(mode: WorkMode) -> Result<Vec<Tool>> {
                 "search_query",
                 "Search for pages.",
             )?,
-            tool::<FilesystemOpenArguments, FilesystemResponse>(
-                "open",
-                "Fetch the pages.",
-            )?,
+            tool::<FilesystemOpenArguments, FilesystemResponse>("open", "Fetch the pages.")?,
         ]);
     }
     Ok(vec![

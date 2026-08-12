@@ -1,5 +1,6 @@
 use crate::{Result, error::AppError, models::FilesystemResponse, page::PageContent};
 use nanoid::nanoid;
+use path_slash::PathExt as _;
 use std::{
     collections::HashMap,
     io::ErrorKind,
@@ -78,7 +79,7 @@ impl Invocation {
     }
     pub(super) fn response(&self, error: Option<String>) -> FilesystemResponse {
         FilesystemResponse {
-            output_path: self.root.to_string_lossy().into_owned(),
+            output_path: self.root.to_slash_lossy().into_owned(),
             error: error.unwrap_or_default(),
             warning: String::new(),
         }

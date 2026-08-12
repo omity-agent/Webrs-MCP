@@ -59,6 +59,7 @@ jina:
 tinyfish:
   endpoint: https://api.fetch.tinyfish.ai # TinyFish Fetch endpoint.
   format: markdown # Requested output format.
+  max_urls_per_request: 10 # TinyFish accepts at most 10 URLs in one Fetch request.
   per_url_timeout_ms: 110000 # Per-URL fetch timeout sent to TinyFish.
 
 # Token chunking behavior.

@@ -66,6 +66,7 @@ pub struct JinaConfig {
 pub struct TinyFishConfig {
     pub endpoint: String,
     pub format: String,
+    pub max_urls_per_request: usize,
     pub per_url_timeout_ms: u64,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -162,18 +163,7 @@ impl AppConfig {
         validation::endpoint(&self.search.endpoint, "search.endpoint")?;
         validation::endpoint(&self.jina.endpoint, "jina.endpoint")?;
         validation::endpoint(&self.tinyfish.endpoint, "tinyfish.endpoint")?;
-        validation::positive(
-            &self.tinyfish.per_url_timeout_ms,
-            "tinyfish.per_url_timeout_ms",
-        )?;
-        if self.tinyfish.per_url_timeout_ms > 110_000 {
-            return Err(AppError::config(
-                "tinyfish.per_url_timeout_ms must be <= 110000",
-            ));
-        }
-        if self.tinyfish.format != "markdown" {
-            return Err(AppError::config("tinyfish.format must be markdown"));
-        }
+        validation::tinyfish(&self.tinyfish)?;
         validation::endpoint(&self.jina.arxiv_pdf_url_prefix, "jina.arxiv_pdf_url_prefix")?;
         validation::endpoint(
             &self.jina.arxiv_html_url_prefix,

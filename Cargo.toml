@@ -94,6 +94,7 @@ http = "*"
 mimalloc = { version = "*", features = ["v3"] }
 nanoid = "*"
 num-traits = "*"
+path-slash = "*"
 percent-encoding = "*"
 rand = "*"
 reqwest = { version = "*", default-features = false, features = ["deflate", "gzip", "json", "rustls-tls"] }
