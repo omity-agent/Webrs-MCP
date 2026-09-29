@@ -18,17 +18,24 @@ protocol:
 # Header names expected from MCP HTTP clients.
 headers:
   exa_api_key: x-exa-api-key # Exa API key header.
+  octen_api_key: x-octen-api-key # Octen API key header; mutually exclusive with Exa.
   jina_api_key: x-jina-api-key # Jina API key header.
   tinyfish_api_key: x-tinyfish-api-key # TinyFish Fetch API key header.
 
-# Exa search behavior.
+# Search behavior; the supplied API key selects exactly one backend.
 search:
-  endpoint: https://api.exa.ai/search # Exa search endpoint.
   num_results: 10 # Results per request.
-  type: deep # Exa search type.
-  highlights_max_characters: 600 # Highlight character budget.
-  max_age_hours: 9007199254740991 # Cache age policy sent to Exa.
-  livecrawl_timeout: 30000 # Exa livecrawl timeout in milliseconds.
+  exa:
+    endpoint: https://api.exa.ai/search # Exa search endpoint.
+    type: deep # Exa search type.
+    highlights_max_characters: 600 # Highlight character budget.
+    max_age_hours: 9007199254740991 # Cache age policy sent to Exa.
+    livecrawl_timeout: 30000 # Exa livecrawl timeout in milliseconds.
+  octen:
+    endpoint: https://api.octen.ai/search # Octen Web Search endpoint.
+    highlights_max_tokens: 512 # Highlight token budget, from 100 to 20000.
+    format: markdown # Highlight format: text or markdown.
+    safesearch: off # Adult-content filter: strict or off.
 
 # HTTP client behavior for all outbound requests.
 http:

@@ -173,15 +173,12 @@ fn decode(value: &str) -> String {
     percent_decode_str(value).decode_utf8_lossy().into_owned()
 }
 fn path_parts(parsed: &Url) -> Vec<String> {
-    parsed
-        .path_segments()
-        .map(|segments| {
-            segments
-                .filter(|part| !part.is_empty())
-                .map(str::to_owned)
-                .collect()
-        })
-        .unwrap_or_default()
+    parsed.path_segments().map_or_else(Vec::new, |segments| {
+        segments
+            .filter(|part| !part.is_empty())
+            .map(str::to_owned)
+            .collect()
+    })
 }
 fn npm_encode(value: &str) -> String {
     utf8_percent_encode(value, &NPM_PATH_SEGMENT).to_string()

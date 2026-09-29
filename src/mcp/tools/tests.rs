@@ -1,4 +1,4 @@
-use super::identity::{reader_credentials, required_api_key};
+use super::identity::{reader_credentials, search_credentials};
 use crate::{Result, config, error::AppError, page::reader::ReaderCredentials};
 use axum::http::{
     HeaderMap, HeaderValue,
@@ -55,13 +55,13 @@ fn reader_credentials_uses_fallback_without_reader_headers() {
     );
 }
 #[test]
-fn missing_exa_api_key_is_reported_when_tool_is_called() {
+fn missing_search_api_key_is_reported_when_tool_is_called() {
     let config = config::load_embedded().unwrap_or_else(|error| panic!("{error}"));
     let headers = HeaderMap::new();
-    let error = required_api_key(&headers, &config.headers.exa_api_key, None)
+    let error = search_credentials(&headers, &config.headers, None)
         .unwrap_err()
         .client_message();
-    assert!(error.contains("Missing required header"));
+    assert!(error.contains("Missing required search API key"));
     assert!(error.contains(&config.headers.exa_api_key));
 }
 fn header_name(value: &str) -> core::result::Result<HeaderName, InvalidHeaderName> {

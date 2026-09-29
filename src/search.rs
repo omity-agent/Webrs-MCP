@@ -1,18 +1,33 @@
-pub mod exa;
-mod payload;
-pub type ExaSearchClient = exa::ExaSearchClient;
-use crate::{Result, config::AppConfig};
-#[inline]
-pub(crate) fn client(config: &AppConfig) -> Result<ExaSearchClient> {
-    ExaSearchClient::new(config)
+mod dispatch;
+mod exa;
+mod filters;
+mod octen;
+pub type SearchBatch = dispatch::SearchBatch;
+pub type SearchClient = dispatch::SearchClient;
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum SearchCredentials {
+    Exa(String),
+    Octen(String),
 }
-#[must_use]
-#[inline]
-pub(crate) const fn provider_name() -> &'static str {
-    "Exa"
-}
-#[must_use]
-#[inline]
-pub(crate) const fn api_key_header() -> &'static str {
-    "x-api-key"
+impl SearchCredentials {
+    #[inline]
+    #[must_use]
+    pub const fn provider_name(&self) -> &'static str {
+        match *self {
+            Self::Exa(_) => "Exa",
+            Self::Octen(_) => "Octen",
+        }
+    }
+    #[inline]
+    #[must_use]
+    #[expect(
+        clippy::pattern_type_mismatch,
+        reason = "Borrowing the enum variants keeps API keys owned by the credentials."
+    )]
+    pub fn api_key(&self) -> &str {
+        match self {
+            Self::Exa(key) | Self::Octen(key) => key,
+        }
+    }
 }

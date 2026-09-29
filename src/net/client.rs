@@ -4,7 +4,7 @@ use crate::{
     net::{SsrfGuard, body, resolver::GuardedResolver},
 };
 use alloc::sync::Arc;
-use axum::body::Bytes;
+use bytes::Bytes;
 use core::num::NonZeroUsize;
 use core::time::Duration;
 use redirect::redirect_target;
@@ -13,7 +13,7 @@ use reqwest::{
     header::{CONTENT_TYPE, HeaderMap, HeaderValue, LOCATION},
     redirect::Policy,
 };
-use serde::Serialize;
+use serde_core::Serialize;
 use tokio::sync::Semaphore;
 mod redirect;
 #[derive(Clone)]

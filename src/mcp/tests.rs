@@ -154,7 +154,7 @@ fn stdio_service_allows_private_network_urls() {
         &config,
         WorkMode::Response,
         ToolCredentials {
-            exa_api_key: Some("exa-key".to_owned()),
+            search: Some(crate::search::SearchCredentials::Exa("exa-key".to_owned())),
             reader: None,
         },
     )

@@ -7,7 +7,10 @@ fn exa_api_key_configures_credentials() {
     let options = cli
         .runtime_options()
         .unwrap_or_else(|error| panic!("{error}"));
-    assert_eq!(options.credentials.exa_api_key.as_deref(), Some("exa"));
+    assert_eq!(
+        options.credentials.search,
+        Some(crate::search::SearchCredentials::Exa("exa".to_owned()))
+    );
 }
 #[test]
 fn http_transport_is_default() {

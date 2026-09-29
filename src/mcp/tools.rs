@@ -7,7 +7,7 @@ use crate::{
     mcp::processing::{find_pages, open_pages},
     models::SearchQueryResponse,
     page::{PageFetcher, TokenChunker, reader::ReaderCredentials},
-    search::ExaSearchClient,
+    search::{SearchClient, SearchCredentials},
 };
 use axum::http::HeaderMap;
 use fancy_regex::Regex;
@@ -17,11 +17,11 @@ mod identity;
 mod render;
 #[cfg(test)]
 mod tests;
-use identity::{reader_credentials, required_api_key};
+use identity::{reader_credentials, search_credentials};
 pub(crate) use render::ToolOutput;
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ToolCredentials {
-    pub exa_api_key: Option<String>,
+    pub search: Option<SearchCredentials>,
     pub reader: Option<ReaderCredentials>,
 }
 #[derive(Clone)]
@@ -30,7 +30,7 @@ pub struct ToolService {
     credentials: ToolCredentials,
     chunker: TokenChunker,
     page_fetcher: PageFetcher,
-    search: ExaSearchClient,
+    search: SearchClient,
     mode: WorkMode,
 }
 impl ToolService {
@@ -48,7 +48,7 @@ impl ToolService {
             credentials,
             chunker: TokenChunker::new(&config.chunking)?,
             page_fetcher: PageFetcher::new(config.clone())?,
-            search: crate::search::client(&config)?,
+            search: SearchClient::new(&config)?,
             config,
             mode,
         })
@@ -83,18 +83,20 @@ impl ToolService {
         headers: &HeaderMap,
     ) -> Result<ToolOutput> {
         let normalized = search_arguments(arguments)?;
-        let key = required_api_key(
+        let credentials = search_credentials(
             headers,
-            &self.config.headers.exa_api_key,
-            self.credentials.exa_api_key.as_deref(),
+            &self.config.headers,
+            self.credentials.search.as_ref(),
         )?;
-        let results = self
+        let batch = self
             .search
-            .search_many(&normalized.value.requests, &key)
+            .search_many(&normalized.value.requests, &credentials, true)
             .await?;
+        let mut warnings = normalized.warning.unwrap_or_default();
+        warnings.extend(batch.warnings);
         Ok(ToolOutput::Search(SearchQueryResponse {
-            results,
-            warning: normalized.warning,
+            results: batch.groups.into_iter().flatten().collect(),
+            warning: (!warnings.is_empty()).then_some(warnings),
         }))
     }
     async fn open(&self, arguments: Option<Value>, headers: &HeaderMap) -> Result<ToolOutput> {

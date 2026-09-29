@@ -1,6 +1,6 @@
 use super::{
     ToolOutput, ToolService,
-    identity::{reader_credentials, required_api_key},
+    identity::{reader_credentials, search_credentials},
 };
 use crate::{
     Result,
@@ -43,38 +43,45 @@ impl ToolService {
     ) -> Result<FilesystemResponse> {
         let arguments = arguments::search(raw)?;
         let invocation = Invocation::create(&arguments.output_path).await?;
+        let mut warnings = Vec::new();
         let result = self
-            .search_into_invocation(arguments, headers, &invocation)
+            .search_into_invocation(arguments, headers, &invocation, &mut warnings)
             .await;
-        Ok(invocation.response(result.err().map(|error| error.client_message())))
+        let mut response = invocation.response(result.err().map(|error| error.client_message()));
+        response.warning = warnings.join("\n");
+        Ok(response)
     }
     async fn search_into_invocation(
         &self,
         arguments: FilesystemSearchArguments,
         headers: &HeaderMap,
         invocation: &Invocation,
+        warnings: &mut Vec<String>,
     ) -> Result<()> {
         let request_directories = (0..arguments.requests.len())
             .map(|index| PathBuf::from(index.to_string()))
             .collect::<Vec<_>>();
         invocation.prepare(request_directories.iter()).await?;
-        let api_key = required_api_key(
+        let search_key = search_credentials(
             headers,
-            &self.config.headers.exa_api_key,
-            self.credentials.exa_api_key.as_deref(),
+            &self.config.headers,
+            self.credentials.search.as_ref(),
         )?;
-        let groups = self
+        let batch = self
             .search
-            .search_urls_many(&arguments.requests, &api_key)
+            .search_many(&arguments.requests, &search_key, false)
             .await?;
-        let targets = groups
+        warnings.extend(batch.warnings);
+        let targets = batch
+            .groups
             .into_iter()
             .enumerate()
-            .flat_map(|(request_index, urls)| {
-                urls.into_iter()
+            .flat_map(|(request_index, results)| {
+                results
+                    .into_iter()
                     .enumerate()
-                    .map(move |(result_index, url)| PageTarget {
-                        url,
+                    .map(move |(result_index, result)| PageTarget {
+                        url: result.url,
                         directory: PathBuf::from(request_index.to_string())
                             .join(result_index.to_string()),
                         label: format!("requests[{request_index}].results[{result_index}]"),

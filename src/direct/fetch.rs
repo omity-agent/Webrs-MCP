@@ -5,7 +5,7 @@ use crate::{
     error::AppError,
     net::{FetchResponse, SecureHttpClient},
 };
-use futures::future::{BoxFuture, Shared, join};
+use futures_util::future::{BoxFuture, Shared, join};
 use probe::extract_direct_content;
 use reqwest::header::{ACCEPT, HeaderMap, HeaderValue, USER_AGENT};
 pub type SharedProbeFetch = Shared<BoxFuture<'static, Result<FetchResponse>>>;

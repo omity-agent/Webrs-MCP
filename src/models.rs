@@ -46,6 +46,9 @@ pub struct SearchQueryRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub domains: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(
+        description = "Exa category filter. Octen ignores this field and returns a warning."
+    )]
     pub category: Option<SearchCategory>,
 }
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]

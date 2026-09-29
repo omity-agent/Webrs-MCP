@@ -1,5 +1,6 @@
 mod embedded;
 mod protocol;
+mod providers;
 pub mod types;
 mod validation;
 use crate::Result;
@@ -12,7 +13,9 @@ pub type HttpConfig = types::HttpConfig;
 pub type JinaConfig = types::JinaConfig;
 pub type JinaViewportConfig = types::JinaViewportConfig;
 pub type ProtocolConfig = protocol::ProtocolConfig;
-pub type SearchConfig = types::SearchConfig;
+pub type ExaConfig = providers::ExaConfig;
+pub type OctenConfig = providers::OctenConfig;
+pub type SearchConfig = providers::SearchConfig;
 pub type ServerConfig = types::ServerConfig;
 pub type SsrfConfig = types::SsrfConfig;
 pub type TinyFishConfig = types::TinyFishConfig;

@@ -14,7 +14,7 @@ use rmcp::{
     model::{
         CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, DiscoverResult,
         Implementation, JsonObject, ListToolsResult, PaginatedRequestParams, ProtocolVersion,
-        ServerCapabilities, ServerInfo, Tool,
+        ServerCapabilities, ServerConfig, Tool,
     },
     service::{MaybeSendFuture, RequestContext, RoleServer},
 };
@@ -28,7 +28,7 @@ mod tests;
 )]
 impl ServerHandler for ToolService {
     #[inline]
-    fn get_info(&self) -> ServerInfo {
+    fn get_info(&self) -> ServerConfig {
         server_info(self.config())
     }
     #[inline]
@@ -97,9 +97,9 @@ fn list_tools_result(config: &AppConfig, tools: Vec<Tool>) -> ListToolsResult {
 fn discover_result(config: &AppConfig) -> DiscoverResult {
     DiscoverResult::from_server_info(SUPPORTED_PROTOCOL_VERSIONS.to_vec(), server_info(config))
 }
-fn server_info(config: &AppConfig) -> ServerInfo {
+fn server_info(config: &AppConfig) -> ServerConfig {
     let capabilities = ServerCapabilities::builder().enable_tools().build();
-    ServerInfo::new(capabilities)
+    ServerConfig::new(capabilities)
         .with_server_info(Implementation::new(config.server.name.clone(), VERSION))
         .with_protocol_version(ProtocolVersion::V_2026_07_28)
         .with_instructions(config.server.instructions.clone())

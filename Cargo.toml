@@ -1,3 +1,14 @@
+cargo-features = [
+    "different-binary-name",
+    "multiple-build-scripts",
+    "open-namespaces",
+    "panic-immediate-abort",
+    "path-bases",
+    "public-dependency",
+    "trim-paths",
+    "unstable-editions",
+]
+
 [lints.clippy]
 all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
@@ -41,6 +52,7 @@ too_many_lines = "allow"
 undocumented_unsafe_blocks = "allow"
 unneeded_field_pattern = "allow"
 unwrap_used = "allow"
+use_debug = "allow"
 wildcard_dependencies = "allow"
 
 [lints.rust]
@@ -64,6 +76,7 @@ panic = 'unwind'
 incremental = true
 codegen-units = 256
 rpath = false
+trim-paths = "all"
 
 [profile.release]
 opt-level = 3
@@ -72,10 +85,11 @@ strip = "symbols"
 debug-assertions = false
 overflow-checks = false
 lto = "fat"
-panic = "abort"
+panic = "immediate-abort"
 incremental = false
 codegen-units = 1
 rpath = false
+trim-paths = "all"
 
 [package]
 name = "web-rs"
@@ -83,35 +97,58 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-anyhow = "*"
-axum = { version = "*", features = ["macros"] }
-chrono = { version = "*", default-features = false, features = ["clock", "std"] }
+anyhow = { version = "*", public = true }
+axum = { version = "*", features = ["macros"], public = true }
+bytes = { version = "*", public = true }
+chrono = { version = "*", default-features = false, features = [
+    "clock",
+    "std",
+] }
 clap = { version = "*", features = ["derive"] }
 content_inspector = "*"
-fancy-regex = "*"
+fancy-regex = { version = "*", public = true }
 finesse = "*"
-futures = "*"
-http = "*"
+futures = { version = "*", public = true }
+futures-util = { version = "*", public = true }
+http = { version = "*", public = true }
 http-acl = "*"
 mime = "*"
-mimalloc = { version = "*", features = ["v3"] }
 nanoid = "*"
 num-traits = "*"
 path-slash = "*"
 percent-encoding = "*"
-reqwest = { version = "*", default-features = false, features = ["deflate", "gzip", "json", "rustls-tls"] }
-rmcp = { version = "*", features = ["macros", "schemars", "server", "transport-io", "transport-streamable-http-server"] }
+reqwest = { git = "https://github.com/seanmonstar/reqwest.git", default-features = false, features = [
+    "deflate",
+    "gzip",
+    "json",
+], public = true }
+rmcp = { git = "https://github.com/modelcontextprotocol/rust-sdk", features = [
+    "macros",
+    "schemars",
+    "server",
+    "transport-io",
+    "transport-streamable-http-server",
+], public = true }
 schemars = { version = "*", features = ["derive"] }
-serde = { version = "*", features = ["derive"] }
+serde = { version = "*", features = ["derive"], public = true }
+serde_core = { version = "*", public = true }
 serde-saphyr = "*"
-sonic-rs = "*"
+snmalloc-rs = { git = "https://github.com/microsoft/snmalloc.git" }
+sonic-rs = { version = "*", public = true }
 strsim = "*"
 thiserror = "*"
 tiktoken = "*"
-tokio = { version = "*", features = ["fs", "macros", "net", "rt-multi-thread", "signal", "sync"] }
+tokio = { version = "*", features = [
+    "fs",
+    "macros",
+    "net",
+    "rt-multi-thread",
+    "signal",
+    "sync",
+] }
 tracing = "*"
 tracing-subscriber = { version = "*", features = ["env-filter", "fmt"] }
-url = "*"
+url = { version = "*", public = true }
 walkdir = "*"
 
 [dev-dependencies]

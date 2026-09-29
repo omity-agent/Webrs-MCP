@@ -99,7 +99,7 @@ fn extract_content(headers: &HeaderMap, body: &[u8]) -> Result<String> {
             content_type.essence_str() == mime::TEXT_EVENT_STREAM.essence_str()
         });
     if is_event_stream {
-        return Ok(extract_event_stream_content(body));
+        return extract_event_stream_content(body);
     }
     sonic_rs::from_slice::<Value>(body).map_or_else(
         |_error| Ok(String::from_utf8_lossy(body).into_owned()),
@@ -127,17 +127,21 @@ fn extract_payload_content(payload: &Value) -> Option<String> {
     }
     payload.as_str().map(str::to_owned)
 }
-fn extract_event_stream_content(body: &[u8]) -> String {
+fn extract_event_stream_content(body: &[u8]) -> Result<String> {
     let mut parser = Parser::new();
-    parser.feed(body);
-    parser.end();
+    parser
+        .feed(body)
+        .map_err(|error| AppError::client(format!("Jina SSE parsing failed: {error}")))?;
+    parser
+        .end()
+        .map_err(|error| AppError::client(format!("Jina SSE parsing failed: {error}")))?;
     let mut latest_content = None;
     while let Some(frame) = parser.next_frame() {
         if let Frame::Message(message) = frame {
             latest_content = event_stream_content(latest_content, &message.data);
         }
     }
-    latest_content.unwrap_or_else(|| String::from_utf8_lossy(body).into_owned())
+    latest_content.ok_or_else(|| AppError::client("Jina SSE response contains no page content."))
 }
 fn event_stream_content(latest: Option<String>, data: &str) -> Option<String> {
     if data == "[DONE]" {

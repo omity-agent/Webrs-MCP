@@ -16,19 +16,9 @@ pub struct ServerConfig {
 #[serde(deny_unknown_fields)]
 pub struct HeaderConfig {
     pub exa_api_key: String,
+    pub octen_api_key: String,
     pub jina_api_key: String,
     pub tinyfish_api_key: String,
-}
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct SearchConfig {
-    pub endpoint: String,
-    pub num_results: u32,
-    #[serde(rename = "type")]
-    pub search_type: String,
-    pub highlights_max_characters: u32,
-    pub max_age_hours: u64,
-    pub livecrawl_timeout: u32,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -112,7 +102,7 @@ pub struct AppConfig {
     pub server: ServerConfig,
     pub protocol: crate::config::ProtocolConfig,
     pub headers: HeaderConfig,
-    pub search: SearchConfig,
+    pub search: crate::config::SearchConfig,
     pub http: HttpConfig,
     pub jina: JinaConfig,
     pub tinyfish: TinyFishConfig,
@@ -124,12 +114,7 @@ pub struct AppConfig {
 impl AppConfig {
     #[inline]
     pub fn validate(&self) -> Result<()> {
-        validation::positive(&self.search.num_results, "search.num_results")?;
-        validation::positive(
-            &self.search.highlights_max_characters,
-            "search.highlights_max_characters",
-        )?;
-        validation::positive(&self.search.livecrawl_timeout, "search.livecrawl_timeout")?;
+        self.search.validate()?;
         validation::positive(&self.chunking.chunk_tokens, "chunking.chunk_tokens")?;
         validation::positive(
             &self.chunking.max_concurrent_tasks,
@@ -160,7 +145,6 @@ impl AppConfig {
             ));
         }
         validation::header_value(&self.http.user_agent, "http.user_agent")?;
-        validation::endpoint(&self.search.endpoint, "search.endpoint")?;
         validation::endpoint(&self.jina.endpoint, "jina.endpoint")?;
         validation::endpoint(&self.tinyfish.endpoint, "tinyfish.endpoint")?;
         validation::tinyfish(&self.tinyfish)?;
