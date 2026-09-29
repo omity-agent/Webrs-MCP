@@ -5,15 +5,11 @@ use crate::{
     error::AppError,
     net::{FetchResponse, SecureHttpClient},
 };
-use futures_util::future::{BoxFuture, Shared, join};
+use futures::future::{BoxFuture, Shared, join};
 use probe::extract_direct_content;
 use reqwest::header::{ACCEPT, HeaderMap, HeaderValue, USER_AGENT};
-pub type SharedProbeFetch = Shared<BoxFuture<'static, Result<FetchResponse>>>;
-#[expect(
-    clippy::missing_inline_in_public_items,
-    reason = "The public direct fetch entrypoint performs HTTP I/O and keeps protocol terminology."
-)]
-pub async fn fetch_direct_text(
+pub(crate) type SharedProbeFetch = Shared<BoxFuture<'static, Result<FetchResponse>>>;
+pub(crate) async fn fetch_direct_text(
     client: &SecureHttpClient,
     target: &DirectFetchTarget,
     direct_config: &DirectFetchConfig,
@@ -24,11 +20,7 @@ pub async fn fetch_direct_text(
         fetch_target_responses(client, target, headers, direct_config, http_config).await?;
     extract_direct_content(target, &response, probe_response, direct_config)
 }
-#[expect(
-    clippy::missing_inline_in_public_items,
-    reason = "The public direct fetch entrypoint performs HTTP I/O and keeps protocol terminology."
-)]
-pub async fn fetch_direct_text_with_probe(
+pub(crate) async fn fetch_direct_text_with_probe(
     client: &SecureHttpClient,
     target: &DirectFetchTarget,
     direct_config: &DirectFetchConfig,
@@ -48,7 +40,7 @@ pub async fn fetch_direct_text_with_probe(
     extract_direct_content(target, &response, Some(probe_result), direct_config)
 }
 #[inline]
-pub fn shared_probe_fetch(
+pub(crate) fn shared_probe_fetch(
     client: SecureHttpClient,
     probe_url: String,
     target: &DirectFetchTarget,

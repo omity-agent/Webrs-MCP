@@ -1,5 +1,5 @@
 use crate::{Result, error::AppError};
-use reqwest::header::HeaderValue;
+use reqwest::header::{HeaderName, HeaderValue};
 use url::Url;
 pub fn positive<T>(value: &T, path: &str) -> Result<()>
 where
@@ -24,6 +24,11 @@ pub fn threshold(value: f64, path: &str) -> Result<()> {
 }
 pub fn header_value(value: &str, path: &str) -> Result<()> {
     HeaderValue::from_str(value)
+        .map(|_header| ())
+        .map_err(|error| AppError::config(format!("{path}: {error}")))
+}
+pub fn header_name(value: &str, path: &str) -> Result<()> {
+    HeaderName::from_bytes(value.as_bytes())
         .map(|_header| ())
         .map_err(|error| AppError::config(format!("{path}: {error}")))
 }

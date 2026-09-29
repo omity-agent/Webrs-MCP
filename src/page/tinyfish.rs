@@ -1,4 +1,5 @@
 use crate::{Result, config::AppConfig, error::AppError, net::SecureHttpClient};
+use alloc::sync::Arc;
 use futures::future::join_all;
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde::Serialize;
@@ -8,7 +9,7 @@ mod tests;
 use response::{extract_markdowns, service_error};
 #[derive(Clone)]
 pub struct TinyFishFetchClient {
-    config: AppConfig,
+    config: Arc<AppConfig>,
     http: SecureHttpClient,
 }
 #[derive(Serialize)]
@@ -20,7 +21,7 @@ struct TinyFishPayload<'request> {
 impl TinyFishFetchClient {
     #[inline]
     #[must_use]
-    pub const fn new(config: AppConfig, http: SecureHttpClient) -> Self {
+    pub const fn new(config: Arc<AppConfig>, http: SecureHttpClient) -> Self {
         Self { config, http }
     }
     #[expect(

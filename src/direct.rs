@@ -10,7 +10,7 @@ mod tests;
 use crate::config::DirectFetchConfig;
 pub type DirectFetchTarget = target::DirectFetchTarget;
 pub type ResponseFormat = target::ResponseFormat;
-pub type SharedProbeFetch = fetch::SharedProbeFetch;
+pub(crate) type SharedProbeFetch = fetch::SharedProbeFetch;
 #[inline]
 #[must_use]
 pub fn resolve_direct_fetch_target(
@@ -42,11 +42,7 @@ pub fn resolve_direct_fetch_target(
     mediawiki::resolve_mediawiki_api_url(&parsed, config)
         .map(|request_url| DirectFetchTarget::mediawiki(url, request_url))
 }
-#[expect(
-    clippy::missing_inline_in_public_items,
-    reason = "The async direct fetch facade performs HTTP I/O and is not an inline candidate."
-)]
-pub async fn fetch_direct_text(
+pub(crate) async fn fetch_direct_text(
     client: &crate::net::SecureHttpClient,
     target: &DirectFetchTarget,
     direct_config: &crate::config::DirectFetchConfig,
@@ -54,11 +50,7 @@ pub async fn fetch_direct_text(
 ) -> crate::Result<String> {
     fetch::fetch_direct_text(client, target, direct_config, http_config).await
 }
-#[expect(
-    clippy::missing_inline_in_public_items,
-    reason = "The async direct fetch facade performs HTTP I/O and is not an inline candidate."
-)]
-pub async fn fetch_direct_text_with_probe(
+pub(crate) async fn fetch_direct_text_with_probe(
     client: &crate::net::SecureHttpClient,
     target: &DirectFetchTarget,
     direct_config: &crate::config::DirectFetchConfig,
@@ -69,7 +61,7 @@ pub async fn fetch_direct_text_with_probe(
         .await
 }
 #[inline]
-pub fn shared_probe_fetch(
+pub(crate) fn shared_probe_fetch(
     client: crate::net::SecureHttpClient,
     probe_url: String,
     target: &DirectFetchTarget,

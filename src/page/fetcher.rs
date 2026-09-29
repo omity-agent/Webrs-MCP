@@ -36,17 +36,17 @@ pub enum PageSource {
 }
 #[derive(Clone)]
 pub struct PageFetcher {
-    config: AppConfig,
+    config: Arc<AppConfig>,
     http: SecureHttpClient,
     guard: SsrfGuard,
     reader: PageReader,
 }
 impl PageFetcher {
     #[inline]
-    pub fn new(config: AppConfig) -> Result<Self> {
+    pub fn new(config: Arc<AppConfig>) -> Result<Self> {
         let http = secure_client_from_config(&config)?;
         let guard = guard(&config.ssrf);
-        let reader = PageReader::new(config.clone(), http.clone());
+        let reader = PageReader::new(Arc::clone(&config), http.clone());
         Ok(Self {
             config,
             http,

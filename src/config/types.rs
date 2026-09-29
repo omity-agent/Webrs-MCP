@@ -145,6 +145,10 @@ impl AppConfig {
             ));
         }
         validation::header_value(&self.http.user_agent, "http.user_agent")?;
+        validation::header_name(&self.headers.exa_api_key, "headers.exa_api_key")?;
+        validation::header_name(&self.headers.octen_api_key, "headers.octen_api_key")?;
+        validation::header_name(&self.headers.jina_api_key, "headers.jina_api_key")?;
+        validation::header_name(&self.headers.tinyfish_api_key, "headers.tinyfish_api_key")?;
         validation::endpoint(&self.jina.endpoint, "jina.endpoint")?;
         validation::endpoint(&self.tinyfish.endpoint, "tinyfish.endpoint")?;
         validation::tinyfish(&self.tinyfish)?;

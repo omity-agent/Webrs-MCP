@@ -4,6 +4,7 @@ use crate::{
     error::{AppError, http_service_error},
     net::SecureHttpClient,
 };
+use alloc::sync::Arc;
 use finesse::{Frame, Parser};
 use reqwest::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue};
 use serde::Serialize;
@@ -12,7 +13,7 @@ use sonic_rs::{JsonContainerTrait as _, JsonValueTrait as _, Value};
 mod tests;
 #[derive(Clone)]
 pub struct JinaReaderClient {
-    config: AppConfig,
+    config: Arc<AppConfig>,
     http: SecureHttpClient,
 }
 #[derive(Serialize)]
@@ -23,7 +24,7 @@ struct JinaPayload<'config> {
 impl JinaReaderClient {
     #[inline]
     #[must_use]
-    pub const fn new(config: AppConfig, http: SecureHttpClient) -> Self {
+    pub const fn new(config: Arc<AppConfig>, http: SecureHttpClient) -> Self {
         Self { config, http }
     }
     #[expect(

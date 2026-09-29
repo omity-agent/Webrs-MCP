@@ -13,7 +13,7 @@ use reqwest::{
     header::{CONTENT_TYPE, HeaderMap, HeaderValue, LOCATION},
     redirect::Policy,
 };
-use serde_core::Serialize;
+use serde::Serialize;
 use tokio::sync::Semaphore;
 mod redirect;
 #[derive(Clone)]
@@ -73,9 +73,7 @@ impl SecureHttpClient {
         headers: HeaderMap,
         timeout_seconds: f64,
     ) -> Result<FetchResponse> {
-        let parsed =
-            Url::parse(url).map_err(|error| AppError::client(format!("Invalid URL: {error}")))?;
-        self.request_with_redirects(Method::GET, parsed, headers, None, timeout_seconds, None)
+        self.get_with_limit(url, headers, timeout_seconds, None)
             .await
     }
     #[expect(
@@ -89,6 +87,16 @@ impl SecureHttpClient {
         timeout_seconds: f64,
         max_bytes: usize,
     ) -> Result<FetchResponse> {
+        self.get_with_limit(url, headers, timeout_seconds, Some(max_bytes))
+            .await
+    }
+    async fn get_with_limit(
+        &self,
+        url: &str,
+        headers: HeaderMap,
+        timeout_seconds: f64,
+        body_limit: Option<usize>,
+    ) -> Result<FetchResponse> {
         let parsed =
             Url::parse(url).map_err(|error| AppError::client(format!("Invalid URL: {error}")))?;
         self.request_with_redirects(
@@ -97,15 +105,11 @@ impl SecureHttpClient {
             headers,
             None,
             timeout_seconds,
-            Some(max_bytes),
+            body_limit,
         )
         .await
     }
-    #[expect(
-        clippy::missing_inline_in_public_items,
-        reason = "HTTP POST performs async network I/O and is not an inline candidate."
-    )]
-    pub async fn post_json<Payload>(
+    pub(crate) async fn post_json<Payload>(
         &self,
         url: &str,
         mut headers: HeaderMap,

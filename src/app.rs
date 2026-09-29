@@ -1,6 +1,6 @@
 use crate::{
     Result,
-    cli::{Transport, WorkMode},
+    cli::{RuntimeOptions, Transport, WorkMode},
     config::AppConfig,
     mcp::{self, handler::health, http_service, tools::ToolCredentials},
 };
@@ -15,18 +15,11 @@ const HEALTH_PATH: &str = "/health";
     clippy::missing_inline_in_public_items,
     reason = "The async server entrypoint composes HTTP and stdio MCP services."
 )]
-pub async fn run(
-    config: AppConfig,
-    transport: Transport,
-    mode: WorkMode,
-    credentials: ToolCredentials,
-) -> anyhow::Result<()> {
-    if transport == Transport::Http && mode == WorkMode::Filesystem {
-        anyhow::bail!("filesystem mode can only be used with --transport stdio");
-    }
-    match transport {
+pub async fn run(config: AppConfig, options: RuntimeOptions) -> anyhow::Result<()> {
+    options.validate().map_err(anyhow::Error::from)?;
+    match options.transport {
         Transport::Http => run_http(config).await,
-        Transport::Stdio => run_stdio(config, mode, credentials).await,
+        Transport::Stdio => run_stdio(config, options.mode, options.credentials).await,
     }
 }
 async fn run_http(config: AppConfig) -> anyhow::Result<()> {

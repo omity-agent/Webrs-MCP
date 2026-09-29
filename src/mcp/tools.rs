@@ -9,6 +9,7 @@ use crate::{
     page::{PageFetcher, TokenChunker, reader::ReaderCredentials},
     search::{SearchClient, SearchCredentials},
 };
+use alloc::sync::Arc;
 use axum::http::HeaderMap;
 use fancy_regex::Regex;
 use sonic_rs::Value;
@@ -26,7 +27,7 @@ pub struct ToolCredentials {
 }
 #[derive(Clone)]
 pub struct ToolService {
-    config: AppConfig,
+    config: Arc<AppConfig>,
     credentials: ToolCredentials,
     chunker: TokenChunker,
     page_fetcher: PageFetcher,
@@ -44,17 +45,18 @@ impl ToolService {
         credentials: ToolCredentials,
         mode: WorkMode,
     ) -> Result<Self> {
+        let shared_config = Arc::new(config);
         Ok(Self {
             credentials,
-            chunker: TokenChunker::new(&config.chunking)?,
-            page_fetcher: PageFetcher::new(config.clone())?,
-            search: SearchClient::new(&config)?,
-            config,
+            chunker: TokenChunker::new(&shared_config.chunking)?,
+            page_fetcher: PageFetcher::new(Arc::clone(&shared_config))?,
+            search: SearchClient::new(&shared_config)?,
+            config: shared_config,
             mode,
         })
     }
     #[must_use]
-    pub(crate) const fn config(&self) -> &AppConfig {
+    pub(crate) fn config(&self) -> &AppConfig {
         &self.config
     }
     #[must_use]

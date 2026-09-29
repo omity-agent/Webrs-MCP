@@ -48,17 +48,14 @@ impl Cli {
     }
     #[inline]
     pub fn runtime_options(self) -> crate::Result<RuntimeOptions> {
-        if self.mode == WorkMode::Filesystem && self.transport != Transport::Stdio {
-            return Err(AppError::config(
-                "filesystem mode can only be used with --transport stdio.",
-            ));
-        }
         let credentials = self.credentials()?;
-        Ok(RuntimeOptions {
+        let options = RuntimeOptions {
             transport: self.transport,
             mode: self.mode,
             credentials,
-        })
+        };
+        options.validate()?;
+        Ok(options)
     }
     fn credentials(&self) -> crate::Result<ToolCredentials> {
         if self.jina.is_some() && self.tinyfish.is_some() {
@@ -89,6 +86,17 @@ impl Cli {
             return Err(AppError::config("Search API key must not be empty."));
         }
         Ok(selected)
+    }
+}
+impl RuntimeOptions {
+    #[inline]
+    pub fn validate(&self) -> crate::Result<()> {
+        if self.mode == WorkMode::Filesystem && self.transport != Transport::Stdio {
+            return Err(AppError::config(
+                "filesystem mode can only be used with --transport stdio.",
+            ));
+        }
+        Ok(())
     }
 }
 fn reader_credentials(cli: &Cli) -> Option<ReaderCredentials> {

@@ -8,8 +8,8 @@ pub(super) fn search_credentials(
     config: &HeaderConfig,
     defaults: Option<&SearchCredentials>,
 ) -> Result<SearchCredentials> {
-    let exa = search_header(headers, &config.exa_api_key)?;
-    let octen = search_header(headers, &config.octen_api_key)?;
+    let exa = api_key_header(headers, &config.exa_api_key)?;
+    let octen = api_key_header(headers, &config.octen_api_key)?;
     match (exa, octen) {
         (Some(_exa), Some(_octen)) => Err(AppError::client(format!(
             "Provide exactly one search API key header: {} or {}, not both.",
@@ -25,7 +25,7 @@ pub(super) fn search_credentials(
         }),
     }
 }
-fn search_header(headers: &HeaderMap, name: &str) -> Result<Option<String>> {
+fn api_key_header(headers: &HeaderMap, name: &str) -> Result<Option<String>> {
     let mut values = headers.get_all(name).iter();
     let Some(value) = values.next() else {
         return Ok(None);
@@ -48,8 +48,8 @@ pub(super) fn reader_credentials(
     config: &HeaderConfig,
     fallback: Option<ReaderCredentials>,
 ) -> Result<Option<ReaderCredentials>> {
-    let jina = optional_header(headers, &config.jina_api_key);
-    let tinyfish = optional_header(headers, &config.tinyfish_api_key);
+    let jina = api_key_header(headers, &config.jina_api_key)?;
+    let tinyfish = api_key_header(headers, &config.tinyfish_api_key)?;
     match (jina, tinyfish) {
         (Some(_jina), Some(_tinyfish)) => Err(AppError::client(format!(
             "Provide exactly one remote reader API key header: {} or {}, not both.",
@@ -59,11 +59,4 @@ pub(super) fn reader_credentials(
         (None, Some(api_key)) => Ok(Some(ReaderCredentials::TinyFish(api_key))),
         (None, None) => Ok(fallback),
     }
-}
-fn optional_header(headers: &HeaderMap, name: &str) -> Option<String> {
-    headers
-        .get(name)
-        .and_then(|value| value.to_str().ok())
-        .filter(|value| !value.is_empty())
-        .map(str::to_owned)
 }

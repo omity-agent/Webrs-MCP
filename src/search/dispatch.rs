@@ -6,6 +6,7 @@ use crate::{
     models::{SearchQueryRequest, SearchResult},
     net::{SecureHttpClient, secure_client_from_config},
 };
+use bytes::Bytes;
 use futures::future::try_join_all;
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde::Serialize;
@@ -89,7 +90,7 @@ impl SearchClient {
         headers: HeaderMap,
         payload: &Payload,
         provider: &str,
-    ) -> Result<axum::body::Bytes>
+    ) -> Result<Bytes>
     where
         Payload: Serialize + Sync,
     {

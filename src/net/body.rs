@@ -1,5 +1,5 @@
 use crate::{Result, error::AppError};
-use axum::body::Bytes;
+use bytes::Bytes;
 pub(crate) async fn collect(
     mut response: reqwest::Response,
     limit: Option<usize>,

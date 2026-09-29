@@ -86,7 +86,10 @@ async fn client_splits_requests_at_tinyfish_limit() -> Result<()> {
     config.tinyfish.endpoint = format!("http://{address}/");
     config.ssrf.block_private_networks = false;
     config.ssrf.block_local_hostnames = false;
-    let client = TinyFishFetchClient::new(config.clone(), secure_client_from_config(&config)?);
+    let client = TinyFishFetchClient::new(
+        Arc::new(config.clone()),
+        secure_client_from_config(&config)?,
+    );
     let urls = (0_usize..21_usize)
         .map(|index| format!("https://example.com/{index}"))
         .collect::<Vec<_>>();

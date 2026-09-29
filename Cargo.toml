@@ -109,7 +109,6 @@ content_inspector = "*"
 fancy-regex = { version = "*", public = true }
 finesse = "*"
 futures = { version = "*", public = true }
-futures-util = { version = "*", public = true }
 http = { version = "*", public = true }
 http-acl = "*"
 mime = "*"
@@ -121,6 +120,7 @@ reqwest = { git = "https://github.com/seanmonstar/reqwest.git", default-features
     "deflate",
     "gzip",
     "json",
+    "rustls",
 ], public = true }
 rmcp = { git = "https://github.com/modelcontextprotocol/rust-sdk", features = [
     "macros",
@@ -131,8 +131,7 @@ rmcp = { git = "https://github.com/modelcontextprotocol/rust-sdk", features = [
 ], public = true }
 schemars = { version = "*", features = ["derive"] }
 serde = { version = "*", features = ["derive"], public = true }
-serde_core = { version = "*", public = true }
-serde-saphyr = "*"
+serde-saphyr = { git = "https://github.com/bourumir-wyngs/serde-saphyr.git" }
 snmalloc-rs = { git = "https://github.com/microsoft/snmalloc.git" }
 sonic-rs = { version = "*", public = true }
 strsim = "*"

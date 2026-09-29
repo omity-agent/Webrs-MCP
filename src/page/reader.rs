@@ -4,6 +4,7 @@ use crate::{
     net::SecureHttpClient,
     page::{jina::JinaReaderClient, tinyfish::TinyFishFetchClient},
 };
+use alloc::sync::Arc;
 use futures::future::join_all;
 #[derive(Clone)]
 pub struct PageReader {
@@ -22,9 +23,9 @@ pub enum ReaderCredentials {
 impl PageReader {
     #[inline]
     #[must_use]
-    pub fn new(config: AppConfig, http: SecureHttpClient) -> Self {
+    pub fn new(config: Arc<AppConfig>, http: SecureHttpClient) -> Self {
         Self {
-            jina: JinaReaderClient::new(config.clone(), http.clone()),
+            jina: JinaReaderClient::new(Arc::clone(&config), http.clone()),
             tinyfish: TinyFishFetchClient::new(config, http),
         }
     }
