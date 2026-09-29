@@ -19,7 +19,8 @@ use rmcp::{
     service::{MaybeSendFuture, RequestContext, RoleServer},
 };
 use sonic_rs::Value;
-const SUPPORTED_PROTOCOL_VERSIONS: &[ProtocolVersion] = &[ProtocolVersion::V_2026_07_28];
+const SUPPORTED_PROTOCOL_VERSIONS: &[ProtocolVersion] =
+    &[ProtocolVersion::V_2025_06_18, ProtocolVersion::V_2026_07_28];
 #[cfg(test)]
 mod tests;
 #[expect(
@@ -46,10 +47,12 @@ impl ServerHandler for ToolService {
     fn list_tools(
         &self,
         _request: Option<PaginatedRequestParams>,
-        _context: RequestContext<RoleServer>,
+        context: RequestContext<RoleServer>,
     ) -> impl Future<Output = Result<ListToolsResult, McpError>> + MaybeSendFuture + '_ {
         let result = schemas::tools(self.mode())
-            .map(|tools| list_tools_result(self.config(), tools))
+            .map(|tools| {
+                list_tools_result(self.config(), tools, context.protocol_version().as_ref())
+            })
             .map_err(to_mcp_error);
         core::future::ready(result)
     }
@@ -88,9 +91,17 @@ impl ServerHandler for ToolService {
         }
     }
 }
-fn list_tools_result(config: &AppConfig, tools: Vec<Tool>) -> ListToolsResult {
+fn list_tools_result(
+    config: &AppConfig,
+    tools: Vec<Tool>,
+    version: Option<&ProtocolVersion>,
+) -> ListToolsResult {
+    let result = ListToolsResult::with_all_items(tools);
+    if version != Some(&ProtocolVersion::V_2026_07_28) {
+        return result;
+    }
     let cache = &config.protocol.tools_list_cache;
-    ListToolsResult::with_all_items(tools)
+    result
         .with_ttl_ms(cache.ttl_ms)
         .with_cache_scope(cache.scope)
 }

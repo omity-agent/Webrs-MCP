@@ -6,7 +6,7 @@ use crate::{
 };
 use axum::{Router, routing::get};
 use core::net::SocketAddr;
-use rmcp::{service::serve_directly, transport::stdio};
+use rmcp::{serve_server, transport::stdio};
 use tokio::net::TcpListener;
 use tracing::info;
 const STREAMABLE_HTTP_PATH: &str = "/mcp";
@@ -41,7 +41,7 @@ pub async fn run_stdio(
 ) -> anyhow::Result<()> {
     let service = mcp::stdio_service(&config, mode, credentials)?;
     info!("web MCP server listening on stdio");
-    let running = serve_directly(service, stdio(), None);
+    let running = serve_server(service, stdio()).await?;
     let quit_reason = running.waiting().await?;
     info!(?quit_reason, "web MCP stdio server stopped");
     Ok(())

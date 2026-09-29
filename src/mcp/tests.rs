@@ -134,14 +134,14 @@ fn rmcp_server_info_uses_embedded_identity() {
     assert_eq!(info.protocol_version, ProtocolVersion::V_2026_07_28);
     assert_eq!(
         ServerHandler::supported_protocol_versions(&service).as_ref(),
-        &[ProtocolVersion::V_2026_07_28]
+        &[ProtocolVersion::V_2025_06_18, ProtocolVersion::V_2026_07_28]
     );
     assert_eq!(info.server_info.name, "web");
     assert_eq!(info.server_info.version, VERSION);
     assert!(info.capabilities.tools.is_some());
 }
 #[test]
-fn streamable_http_uses_the_modern_stateless_lifecycle() {
+fn streamable_http_keeps_strict_metadata_as_the_default_policy() {
     let config = config::load_embedded().unwrap_or_else(|error| panic!("{error}"));
     let http = streamable_http_config(&config);
     assert!(!http.legacy_session_mode);

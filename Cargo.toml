@@ -113,6 +113,7 @@ http = { version = "*", public = true }
 http-acl = "*"
 http-body-util = "*"
 mime = "*"
+mimalloc = "*"
 nanoid = "*"
 num-traits = "*"
 path-slash = "*"
@@ -133,7 +134,6 @@ rmcp = { git = "https://github.com/modelcontextprotocol/rust-sdk", features = [
 schemars = { version = "*", features = ["derive"] }
 serde = { version = "*", features = ["derive"], public = true }
 serde-saphyr = { git = "https://github.com/bourumir-wyngs/serde-saphyr.git" }
-snmalloc-rs = { git = "https://github.com/microsoft/snmalloc.git" }
 sonic-rs = { version = "*", public = true }
 strsim = "*"
 thiserror = "*"
@@ -154,3 +154,4 @@ walkdir = "*"
 
 [dev-dependencies]
 tempfile = "*"
+tokio = { version = "*", features = ["process"] }

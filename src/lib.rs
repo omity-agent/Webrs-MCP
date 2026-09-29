@@ -10,7 +10,8 @@ pub mod models;
 pub mod net;
 pub mod page;
 pub mod search;
+use mimalloc::MiMalloc;
 #[global_allocator]
-static ALLOC: snmalloc_rs::SnMalloc = snmalloc_rs::SnMalloc;
+static GLOBAL_ALLOCATOR: MiMalloc = MiMalloc;
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub type Result<T> = core::result::Result<T, error::AppError>;

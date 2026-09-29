@@ -2,12 +2,12 @@ use super::{discover_result, list_tools_result, tool_failure};
 use crate::{cli::WorkMode, config, error::AppError, mcp::schemas};
 use rmcp::model::{CacheScope, ErrorCode, ProtocolVersion};
 #[test]
-fn server_discovery_advertises_the_modern_contract() {
+fn server_discovery_advertises_both_supported_revisions() {
     let config = config::load_embedded().unwrap_or_else(|error| panic!("{error}"));
     let result = discover_result(&config);
     assert_eq!(
         result.supported_versions,
-        vec![ProtocolVersion::V_2026_07_28]
+        vec![ProtocolVersion::V_2025_06_18, ProtocolVersion::V_2026_07_28]
     );
     let server_info = result
         .server_info()
@@ -24,7 +24,7 @@ fn server_discovery_advertises_the_modern_contract() {
 fn tools_list_has_required_cache_fields() {
     let config = config::load_embedded().unwrap_or_else(|error| panic!("{error}"));
     let tools = schemas::tools(WorkMode::Response).unwrap_or_else(|error| panic!("{error}"));
-    let result = list_tools_result(&config, tools);
+    let result = list_tools_result(&config, tools, Some(&ProtocolVersion::V_2026_07_28));
     assert_eq!(result.ttl_ms, Some(3_600_000));
     assert_eq!(result.cache_scope, Some(CacheScope::Public));
 }
