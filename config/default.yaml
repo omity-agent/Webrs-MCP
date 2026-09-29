@@ -33,7 +33,7 @@ search:
     livecrawl_timeout: 30000 # Exa livecrawl timeout in milliseconds.
   octen:
     endpoint: https://api.octen.ai/search # Octen Web Search endpoint.
-    highlights_max_tokens: 512 # Highlight token budget, from 100 to 20000.
+    highlights_max_tokens: 200 # Highlight token budget, from 100 to 20000.
     format: markdown # Highlight format: text or markdown.
     safesearch: off # Adult-content filter: strict or off.
 

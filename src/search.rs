@@ -4,6 +4,22 @@ mod filters;
 mod octen;
 pub type SearchBatch = dispatch::SearchBatch;
 pub type SearchClient = dispatch::SearchClient;
+fn normalize_highlight(highlight: &str) -> String {
+    let mut normalized = String::with_capacity(highlight.len());
+    let mut consecutive_line_feeds: u8 = 0;
+    for character in highlight.chars() {
+        if character == '\n' {
+            if consecutive_line_feeds < 2 {
+                consecutive_line_feeds += 1;
+                normalized.push(character);
+            }
+        } else {
+            consecutive_line_feeds = 0;
+            normalized.push(character);
+        }
+    }
+    normalized
+}
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum SearchCredentials {

@@ -7,7 +7,7 @@ use web_rs::{
 };
 #[tokio::test]
 async fn octen_maps_filters_results_and_warnings() {
-    let upstream = Upstream :: json (& json ! ({ "code" : 0_i64 , "msg" : "success" , "request_id" : "test" , "data" : { "results" : [{ "title" : "Page" , "url" : "https://example.org/" , "highlight" : "Useful text" , "time_published" : "2026-01-01T00:00:00Z" }] } , "meta" : { "warning" : "Partial coverage" } })) . await ;
+    let upstream = Upstream :: json (& json ! ({ "code" : 0_i64 , "msg" : "success" , "request_id" : "test" , "data" : { "results" : [{ "title" : "Page" , "url" : "https://example.org/" , "highlight" : "Useful\n\n\ntext" , "time_published" : "2026-01-01T00:00:00Z" }] } , "meta" : { "warning" : "Partial coverage" } })) . await ;
     let client = SearchClient::new(&upstream.config()).unwrap();
     let mut request = query("你好 search");
     request.recency = Some(7);
@@ -25,7 +25,7 @@ async fn octen_maps_filters_results_and_warnings() {
     let result = batch.groups.first().unwrap().first().unwrap();
     assert_eq!(result.title.as_deref(), Some("Page"));
     assert_eq!(result.date.as_deref(), Some("2026-01-01T00:00:00Z"));
-    assert_eq!(result.highlight, "Useful text");
+    assert_eq!(result.highlight, "Useful\n\ntext");
     assert!(
         batch
             .warnings
@@ -62,7 +62,7 @@ async fn octen_maps_filters_results_and_warnings() {
 }
 #[tokio::test]
 async fn exa_preserves_payload_and_result_contract() {
-    let upstream = Upstream :: json (& json ! ({ "results" : [{ "title" : "Exa" , "url" : "https://example.org/" , "publishedDate" : "2026-01-01" , "highlights" : ["first" , "second"] }] })) . await ;
+    let upstream = Upstream :: json (& json ! ({ "results" : [{ "title" : "Exa" , "url" : "https://example.org/" , "publishedDate" : "2026-01-01" , "highlights" : ["first\n\n\n" , "\nsecond"] }] })) . await ;
     let client = SearchClient::new(&upstream.config()).unwrap();
     let mut request = query("exa");
     request.category = Some(SearchCategory::News);
@@ -73,7 +73,7 @@ async fn exa_preserves_payload_and_result_contract() {
     assert_eq!(batch.warnings, Vec::<String>::new());
     assert_eq!(
         batch.groups.first().unwrap().first().unwrap().highlight,
-        "first\nsecond"
+        "first\n\nsecond"
     );
     let captured = upstream.requests.lock().await.first().unwrap().clone();
     assert_eq!(captured.headers.get("x-api-key").unwrap(), "exa-key");

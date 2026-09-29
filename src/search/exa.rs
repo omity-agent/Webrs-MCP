@@ -1,4 +1,4 @@
-use super::filters;
+use super::{filters, normalize_highlight};
 use crate::{
     Result,
     config::SearchConfig,
@@ -80,7 +80,7 @@ pub(super) fn decode(body: &[u8]) -> Result<Vec<SearchResult>> {
             title: entry.title,
             date: entry.published_date,
             url: entry.url,
-            highlight: entry.highlights.unwrap_or_default().join("\n"),
+            highlight: normalize_highlight(&entry.highlights.unwrap_or_default().join("\n")),
         })
         .collect())
 }

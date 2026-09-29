@@ -1,3 +1,0 @@
-[env]
-# Native CMake dependencies use the same MSVC runtime as the Rust target.
-CMAKE_TOOLCHAIN_FILE = { value = "config/native-runtime.cmake", relative = true }
