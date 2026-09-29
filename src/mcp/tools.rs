@@ -4,14 +4,14 @@ use crate::{
     cli::WorkMode,
     config::AppConfig,
     error::AppError,
-    mcp::processing::{find_pages, open_pages},
+    mcp::processing::{BlockingPool, compile_patterns, find_pages, open_pages},
     models::SearchQueryResponse,
+    net::secure_client_from_config,
     page::{PageFetcher, TokenChunker, reader::ReaderCredentials},
     search::{SearchClient, SearchCredentials},
 };
 use alloc::sync::Arc;
 use axum::http::HeaderMap;
-use fancy_regex::Regex;
 use sonic_rs::Value;
 mod filesystem;
 mod identity;
@@ -30,6 +30,7 @@ pub struct ToolService {
     config: Arc<AppConfig>,
     credentials: ToolCredentials,
     chunker: TokenChunker,
+    processing: BlockingPool,
     page_fetcher: PageFetcher,
     search: SearchClient,
     mode: WorkMode,
@@ -46,11 +47,13 @@ impl ToolService {
         mode: WorkMode,
     ) -> Result<Self> {
         let shared_config = Arc::new(config);
+        let http = secure_client_from_config(&shared_config)?;
         Ok(Self {
             credentials,
             chunker: TokenChunker::new(&shared_config.chunking)?,
-            page_fetcher: PageFetcher::new(Arc::clone(&shared_config))?,
-            search: SearchClient::new(&shared_config)?,
+            processing: BlockingPool::new(shared_config.chunking.max_concurrent_tasks)?,
+            page_fetcher: PageFetcher::new(Arc::clone(&shared_config), http.clone()),
+            search: SearchClient::new(&shared_config, http),
             config: shared_config,
             mode,
         })
@@ -123,6 +126,7 @@ impl ToolService {
             &normalized.value.requests,
             pages,
             self.chunker.clone(),
+            &self.processing,
             warnings,
         )
         .await;
@@ -135,7 +139,7 @@ impl ToolService {
             &self.config.headers,
             self.credentials.reader.clone(),
         )?;
-        let patterns = compile_patterns(&normalized.value.requests)?;
+        let patterns = compile_patterns(&normalized.value.requests, &self.processing).await?;
         let urls = normalized
             .value
             .requests
@@ -152,6 +156,7 @@ impl ToolService {
             pages,
             patterns,
             self.chunker.clone(),
+            &self.processing,
             self.config.find.clone(),
             self.config.chunking.chunk_tokens,
             warnings,
@@ -159,16 +164,4 @@ impl ToolService {
         .await?;
         Ok(ToolOutput::Find(response))
     }
-}
-fn compile_patterns(requests: &[crate::models::FindRequest]) -> Result<Vec<Regex>> {
-    requests
-        .iter()
-        .map(|request| {
-            Regex::new(&format!("(?m){}", request.pattern)).map_err(|error| {
-                AppError::client(format!(
-                    "pattern is not a valid regular expression: {error}"
-                ))
-            })
-        })
-        .collect()
 }

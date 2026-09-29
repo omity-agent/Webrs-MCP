@@ -6,9 +6,12 @@ use axum::{
     http::{HeaderMap, StatusCode, header::CONTENT_TYPE},
     routing::post,
 };
-use rmcp::serde_json::Value;
+use rmcp::{
+    model::{ClientCapabilities, ProtocolVersion, RequestMetaObject},
+    serde_json::Value,
+};
 use tokio::{net::TcpListener, sync::Mutex, task::JoinHandle};
-use web_rs::{config, models::SearchQueryRequest};
+use web_rs::{config, models::SearchQueryRequest, net::secure_client, search::SearchClient};
 pub(super) struct Listener {
     pub address: String,
     pub task: JoinHandle<()>,
@@ -78,6 +81,13 @@ impl Upstream {
         config.jina.endpoint = format!("{}/search", self.server.address);
         config
     }
+    pub fn search_client(&self) -> SearchClient {
+        let settings = self.config();
+        SearchClient::new(
+            &settings,
+            secure_client(&settings.http, &settings.ssrf).unwrap(),
+        )
+    }
 }
 async fn capture(
     State(reply): State<Reply>,
@@ -101,4 +111,10 @@ pub(super) fn query(text: &str) -> SearchQueryRequest {
         domains: None,
         category: None,
     }
+}
+pub(super) fn request_meta() -> RequestMetaObject {
+    let mut meta = RequestMetaObject::new();
+    meta.set_protocol_version(ProtocolVersion::V_2026_07_28);
+    meta.set_client_capabilities(ClientCapabilities::default());
+    meta
 }

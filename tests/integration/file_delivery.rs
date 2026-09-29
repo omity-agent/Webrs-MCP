@@ -1,4 +1,4 @@
-use super::fixture::Upstream;
+use super::fixture::{Upstream, request_meta};
 use core::time::Duration;
 use rmcp::{
     serde_json::{Value, json},
@@ -34,7 +34,7 @@ async fn filesystem_search_delivers_cached_pages_and_all_warnings() {
     let (client_io, server_io) = duplex(0x0001_0000);
     let running = serve_directly(service, server_io, None);
     let mut client = BufReader::new(client_io);
-    let request = json ! ({ "jsonrpc" : "2.0" , "id" : 1_u64 , "method" : "tools/call" , "params" : { "name" : "search_query" , "_meta" : { "io.modelcontextprotocol/protocolVersion" : "2026-07-28" } , "arguments" : { "output_path" : output . path () . to_str () . unwrap () , "requests" : [{ "q" : "test" , "category" : "news" }] } } });
+    let request = json ! ({ "jsonrpc" : "2.0" , "id" : 1_u64 , "method" : "tools/call" , "params" : { "name" : "search_query" , "_meta" : request_meta () , "arguments" : { "output_path" : output . path () . to_str () . unwrap () , "requests" : [{ "q" : "test" , "category" : "news" }] } } });
     let mut encoded = sonic_rs::to_vec(&request).unwrap();
     encoded.push(b'\n');
     client.write_all(&encoded).await.unwrap();
@@ -44,7 +44,9 @@ async fn filesystem_search_delivers_cached_pages_and_all_warnings() {
         .unwrap()
         .unwrap();
     let response: Value = sonic_rs::from_str(&line).unwrap();
-    let result = response.pointer("/result/structuredContent").unwrap();
+    let result = response
+        .pointer("/result/structuredContent")
+        .unwrap_or_else(|| panic!("expected filesystem result: {response}"));
     assert_eq!(result.get("error"), Some(&json!("")), "{response}");
     let warning = result.get("warning").unwrap().as_str().unwrap();
     assert!(warning.contains("category"));

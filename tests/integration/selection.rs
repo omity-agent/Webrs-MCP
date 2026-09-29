@@ -1,4 +1,4 @@
-use super::fixture::{Listener, Upstream};
+use super::fixture::{Listener, Upstream, request_meta};
 use clap::Parser as _;
 use http::{HeaderMap, HeaderValue};
 use rmcp::serde_json::{Value, json};
@@ -31,7 +31,7 @@ fn cli_selects_exactly_one_backend() {
     }
 }
 async fn call(server: &Listener, headers: HeaderMap) -> Value {
-    let response = reqwest :: Client :: builder () . no_proxy () . build () . unwrap () . post (format ! ("{}/mcp" , server . address)) . headers (headers) . header ("MCP-Protocol-Version" , "2026-07-28") . header ("Accept" , "application/json, text/event-stream") . json (& json ! ({ "jsonrpc" : "2.0" , "id" : 1_u64 , "method" : "tools/call" , "params" : { "_meta" : { "io.modelcontextprotocol/protocolVersion" : "2026-07-28" } , "name" : "search_query" , "arguments" : { "requests" : [{ "q" : "test" , "category" : "news" }] } } })) . send () . await . unwrap () ;
+    let response = reqwest :: Client :: builder () . no_proxy () . build () . unwrap () . post (format ! ("{}/mcp" , server . address)) . headers (headers) . header ("MCP-Protocol-Version" , "2026-07-28") . header ("Mcp-Method" , "tools/call") . header ("Mcp-Name" , "search_query") . header ("Accept" , "application/json, text/event-stream") . json (& json ! ({ "jsonrpc" : "2.0" , "id" : 1_u64 , "method" : "tools/call" , "params" : { "_meta" : request_meta () , "name" : "search_query" , "arguments" : { "requests" : [{ "q" : "test" , "category" : "news" }] } } })) . send () . await . unwrap () ;
     let status = response.status();
     let body = response.text().await.unwrap();
     assert!(status.is_success(), "{status}: {body}");

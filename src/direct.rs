@@ -1,3 +1,7 @@
+#![expect(
+    clippy::pub_use,
+    reason = "The facade exposes domain types without duplicating their definitions."
+)]
 pub mod code_hosts;
 pub mod content;
 pub mod fetch;
@@ -8,9 +12,10 @@ pub mod target;
 #[cfg(test)]
 mod tests;
 use crate::config::DirectFetchConfig;
-pub type DirectFetchTarget = target::DirectFetchTarget;
-pub type ResponseFormat = target::ResponseFormat;
-pub(crate) type SharedProbeFetch = fetch::SharedProbeFetch;
+pub(crate) use fetch::{
+    SharedProbeFetch, fetch_direct_text, fetch_direct_text_with_probe, shared_probe_fetch,
+};
+pub use target::{DirectFetchTarget, ResponseFormat};
 #[inline]
 #[must_use]
 pub fn resolve_direct_fetch_target(
@@ -41,34 +46,6 @@ pub fn resolve_direct_fetch_target(
     }
     mediawiki::resolve_mediawiki_api_url(&parsed, config)
         .map(|request_url| DirectFetchTarget::mediawiki(url, request_url))
-}
-pub(crate) async fn fetch_direct_text(
-    client: &crate::net::SecureHttpClient,
-    target: &DirectFetchTarget,
-    direct_config: &crate::config::DirectFetchConfig,
-    http_config: &crate::config::HttpConfig,
-) -> crate::Result<String> {
-    fetch::fetch_direct_text(client, target, direct_config, http_config).await
-}
-pub(crate) async fn fetch_direct_text_with_probe(
-    client: &crate::net::SecureHttpClient,
-    target: &DirectFetchTarget,
-    direct_config: &crate::config::DirectFetchConfig,
-    http_config: &crate::config::HttpConfig,
-    probe_fetch: SharedProbeFetch,
-) -> crate::Result<String> {
-    fetch::fetch_direct_text_with_probe(client, target, direct_config, http_config, probe_fetch)
-        .await
-}
-#[inline]
-pub(crate) fn shared_probe_fetch(
-    client: crate::net::SecureHttpClient,
-    probe_url: String,
-    target: &DirectFetchTarget,
-    direct_config: &crate::config::DirectFetchConfig,
-    http_config: &crate::config::HttpConfig,
-) -> crate::Result<SharedProbeFetch> {
-    fetch::shared_probe_fetch(client, probe_url, target, direct_config, http_config)
 }
 fn microsoft_learn_markdown_url(parsed: &url::Url) -> String {
     let mut pairs: Vec<(String, String)> = parsed

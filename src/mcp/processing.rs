@@ -1,3 +1,7 @@
+#![expect(
+    clippy::pub_use,
+    reason = "The shared executor is exposed for reuse and integration testing."
+)]
 use crate::{
     Result,
     config::FindConfig,
@@ -7,12 +11,15 @@ use crate::{
 };
 use fancy_regex::Regex;
 use futures::{StreamExt as _, stream};
+mod budget;
+pub use budget::BlockingPool;
 #[cfg(test)]
 mod tests;
 pub(crate) async fn open_pages(
     requests: &[OpenRequest],
     pages: Vec<Result<PageContent>>,
     chunker: TokenChunker,
+    pool: &BlockingPool,
     mut warnings: Vec<String>,
 ) -> OpenResponse {
     let mut fetched_pages = pages.into_iter();
@@ -27,23 +34,20 @@ pub(crate) async fn open_pages(
             let result_url = request.url.clone();
             let task_url = request.url;
             async move {
-                let task = tokio::task::spawn_blocking(move || {
-                    process_open_result(
+                let task = pool.run(move || {
+                    Ok(process_open_result(
                         task_url,
                         fetched,
                         chunk_index,
                         request_index,
                         &page_chunker,
-                    )
+                    ))
                 });
                 task.await.unwrap_or_else(|error| {
                     (
                         OpenResult::Failure {
                             url: result_url,
-                            error: AppError::internal(format!(
-                                "page processing task failed: {error}"
-                            ))
-                            .client_message(),
+                            error: error.client_message(),
                         },
                         Vec::new(),
                     )
@@ -90,6 +94,7 @@ pub(crate) async fn find_pages(
     pages: Vec<PageContent>,
     patterns: Vec<Regex>,
     chunker: TokenChunker,
+    pool: &BlockingPool,
     config: FindConfig,
     chunk_tokens: usize,
     mut warnings: Vec<String>,
@@ -109,19 +114,27 @@ pub(crate) async fn find_pages(
                 let page_chunker = chunker.clone();
                 let find_config = config.clone();
                 let requested_snippet_tokens = request.snippet_tokens;
-                tokio::task::spawn_blocking(move || {
-                    let mut page_warnings = Vec::new();
-                    let snippet_tokens = snippet_tokens_for_request(
-                        requested_snippet_tokens,
-                        request_index,
-                        &mut page_warnings,
-                        chunk_tokens,
-                        find_config.default_snippet_tokens,
-                    );
-                    let found =
-                        find_in_page(&page, &pattern, snippet_tokens, &page_chunker, &find_config)?;
-                    Ok::<(FindPage, Vec<String>), AppError>((found, page_warnings))
-                })
+                async move {
+                    pool.run(move || {
+                        let mut page_warnings = Vec::new();
+                        let snippet_tokens = snippet_tokens_for_request(
+                            requested_snippet_tokens,
+                            request_index,
+                            &mut page_warnings,
+                            chunk_tokens,
+                            find_config.default_snippet_tokens,
+                        );
+                        let found = find_in_page(
+                            &page,
+                            &pattern,
+                            snippet_tokens,
+                            &page_chunker,
+                            &find_config,
+                        )?;
+                        Ok::<(FindPage, Vec<String>), AppError>((found, page_warnings))
+                    })
+                    .await
+                }
             },
         );
     let joined = stream::iter(tasks)
@@ -130,9 +143,7 @@ pub(crate) async fn find_pages(
         .await;
     let mut found = Vec::with_capacity(joined.len());
     for task in joined {
-        let result = task
-            .map_err(|error| AppError::internal(format!("page processing task failed: {error}")))?;
-        let (page, page_warnings) = result?;
+        let (page, page_warnings) = task?;
         found.push(page);
         warnings.extend(page_warnings);
     }
@@ -140,6 +151,28 @@ pub(crate) async fn find_pages(
         pages: found,
         warning: (!warnings.is_empty()).then_some(warnings),
     })
+}
+pub(crate) async fn compile_patterns(
+    requests: &[FindRequest],
+    pool: &BlockingPool,
+) -> Result<Vec<Regex>> {
+    let patterns = requests
+        .iter()
+        .map(|request| request.pattern.clone())
+        .collect::<Vec<_>>();
+    pool.run(move || {
+        patterns
+            .iter()
+            .map(|pattern| {
+                Regex::new(&format!("(?m){pattern}")).map_err(|error| {
+                    AppError::client(format!(
+                        "pattern is not a valid regular expression: {error}"
+                    ))
+                })
+            })
+            .collect()
+    })
+    .await
 }
 fn snippet_tokens_for_request(
     requested: Option<usize>,

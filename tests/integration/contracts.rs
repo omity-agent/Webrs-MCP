@@ -1,14 +1,11 @@
 use super::fixture::{Upstream, query};
 use axum::{body::Bytes, http::StatusCode};
 use rmcp::serde_json::json;
-use web_rs::{
-    models::SearchCategory,
-    search::{SearchClient, SearchCredentials},
-};
+use web_rs::{models::SearchCategory, search::SearchCredentials};
 #[tokio::test]
 async fn octen_maps_filters_results_and_warnings() {
     let upstream = Upstream :: json (& json ! ({ "code" : 0_i64 , "msg" : "success" , "request_id" : "test" , "data" : { "results" : [{ "title" : "Page" , "url" : "https://example.org/" , "highlight" : "Useful\n\n\ntext" , "time_published" : "2026-01-01T00:00:00Z" }] } , "meta" : { "warning" : "Partial coverage" } })) . await ;
-    let client = SearchClient::new(&upstream.config()).unwrap();
+    let client = upstream.search_client();
     let mut request = query("你好 search");
     request.recency = Some(7);
     request.domains = Some(vec!["https://Example.org/path".to_owned()]);
@@ -40,16 +37,17 @@ async fn octen_maps_filters_results_and_warnings() {
     );
     let captured = upstream.requests.lock().await.first().unwrap().clone();
     assert_eq!(captured.headers.get("x-api-key").unwrap(), "octen-key");
+    let octen = upstream.config().search.octen;
     for (path, value) in [
         ("/query", json!("你好 search")),
         ("/count", json!(10_u32)),
         ("/include_domains", json!(["example.org"])),
         ("/time_basis", json!("published")),
         ("/highlight/enable", json!(true)),
-        ("/highlight/max_tokens", json!(512_u32)),
+        ("/highlight/max_tokens", json!(octen.highlights_max_tokens)),
         ("/full_content/enable", json!(false)),
-        ("/format", json!("text")),
-        ("/safesearch", json!("strict")),
+        ("/format", json!(octen.format)),
+        ("/safesearch", json!(octen.safesearch)),
     ] {
         assert_eq!(captured.body.pointer(path), Some(&value));
     }
@@ -63,7 +61,7 @@ async fn octen_maps_filters_results_and_warnings() {
 #[tokio::test]
 async fn exa_preserves_payload_and_result_contract() {
     let upstream = Upstream :: json (& json ! ({ "results" : [{ "title" : "Exa" , "url" : "https://example.org/" , "publishedDate" : "2026-01-01" , "highlights" : ["first\n\n\n" , "\nsecond"] }] })) . await ;
-    let client = SearchClient::new(&upstream.config()).unwrap();
+    let client = upstream.search_client();
     let mut request = query("exa");
     request.category = Some(SearchCategory::News);
     request.recency = Some(1);
@@ -114,7 +112,7 @@ async fn url_only_search_disables_content_for_both_backends() {
         ),
     ] {
         let upstream = Upstream::json(&reply).await;
-        let client = SearchClient::new(&upstream.config()).unwrap();
+        let client = upstream.search_client();
         let batch = client
             .search_many(&[query("first"), query("second")], &key, false)
             .await
@@ -151,7 +149,7 @@ async fn octen_rejects_upstream_failures() {
             Bytes::from_static(body.as_bytes()),
         )
         .await;
-        let client = SearchClient::new(&upstream.config()).unwrap();
+        let client = upstream.search_client();
         let error = client
             .search_many(
                 &[query("test")],
@@ -167,7 +165,7 @@ async fn octen_rejects_upstream_failures() {
 #[tokio::test]
 async fn invalid_filters_are_not_silently_discarded() {
     let upstream = Upstream::json(&json!({})).await;
-    let client = SearchClient::new(&upstream.config()).unwrap();
+    let client = upstream.search_client();
     let mut huge_recency = query("test");
     huge_recency.recency = Some(u64::MAX);
     let mut invalid_domain = query("test");

@@ -28,6 +28,7 @@ pub struct HttpConfig {
     pub direct_fetch_timeout_seconds: f64,
     pub max_redirects: usize,
     pub max_concurrent_requests: usize,
+    pub max_response_bytes: usize,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -139,6 +140,7 @@ impl AppConfig {
             &self.http.max_concurrent_requests,
             "http.max_concurrent_requests",
         )?;
+        validation::positive(&self.http.max_response_bytes, "http.max_response_bytes")?;
         if !(0.0_f64..1.0_f64).contains(&self.chunking.overlap_ratio) {
             return Err(AppError::config(
                 "chunking.overlap_ratio must be >= 0 and < 1",

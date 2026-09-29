@@ -60,6 +60,13 @@ impl AppError {
 impl From<reqwest::Error> for AppError {
     #[inline]
     fn from(error: reqwest::Error) -> Self {
+        let mut cause = core::error::Error::source(&error);
+        while let Some(source) = cause {
+            if let Some(application_error) = source.downcast_ref::<Self>() {
+                return application_error.clone();
+            }
+            cause = source.source();
+        }
         if error.is_timeout() {
             return Self::Upstream("upstream request timed out. Retry later.".to_owned());
         }

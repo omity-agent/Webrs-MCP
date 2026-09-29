@@ -6,9 +6,7 @@ use crate::{
 #[test]
 fn direct_request_headers_do_not_send_range() {
     let client = SecureHttpClient::new(
-        0,
-        1,
-        "web-rs-test",
+        &crate::config::load_embedded().unwrap().http,
         SsrfGuard::new(SsrfConfig {
             block_private_networks: false,
             block_local_hostnames: false,

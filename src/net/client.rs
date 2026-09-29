@@ -1,27 +1,25 @@
 use crate::{
     Result,
+    config::HttpConfig,
     error::AppError,
-    net::{SsrfGuard, body, resolver::GuardedResolver},
+    net::{SsrfGuard, body, transport},
 };
 use alloc::sync::Arc;
 use bytes::Bytes;
-use core::num::NonZeroUsize;
 use core::time::Duration;
-use redirect::redirect_target;
 use reqwest::{
-    Method, StatusCode, Url,
-    header::{CONTENT_TYPE, HeaderMap, HeaderValue, LOCATION},
-    redirect::Policy,
+    StatusCode, Url,
+    header::{CONTENT_TYPE, HeaderMap, HeaderValue},
 };
 use serde::Serialize;
 use tokio::sync::Semaphore;
-mod redirect;
 #[derive(Clone)]
 pub struct SecureHttpClient {
-    client: reqwest::Client,
+    direct: reqwest::Client,
+    api: reqwest::Client,
     guard: SsrfGuard,
-    max_redirects: usize,
     requests: Arc<Semaphore>,
+    max_response_bytes: usize,
     user_agent: HeaderValue,
 }
 #[derive(Clone, Debug)]
@@ -32,30 +30,27 @@ pub struct FetchResponse {
 }
 impl SecureHttpClient {
     #[inline]
-    pub fn new(
-        max_redirects: usize,
-        max_concurrent_requests: usize,
-        user_agent: &str,
-        guard: SsrfGuard,
-    ) -> Result<Self> {
-        let request_limit = NonZeroUsize::new(max_concurrent_requests)
-            .ok_or_else(|| AppError::config("http.max_concurrent_requests must be positive"))?;
-        let user_agent_header = HeaderValue::from_str(user_agent)
+    pub fn new(config: &HttpConfig, guard: SsrfGuard) -> Result<Self> {
+        if config.max_concurrent_requests == 0
+            || config.max_concurrent_requests > Semaphore::MAX_PERMITS
+        {
+            return Err(AppError::config(
+                "http.max_concurrent_requests is outside the supported range",
+            ));
+        }
+        if config.max_response_bytes == 0 {
+            return Err(AppError::config("http.max_response_bytes must be positive"));
+        }
+        let user_agent = HeaderValue::from_str(&config.user_agent)
             .map_err(|error| AppError::config(format!("http.user_agent: {error}")))?;
-        let client = reqwest::Client::builder()
-            .dns_resolver(Arc::new(GuardedResolver::new(guard.clone())))
-            .redirect(Policy::none())
-            .user_agent(user_agent_header.clone())
-            .build()
-            .map_err(|error| {
-                AppError::internal(format!("failed to build guarded HTTP client: {error}"))
-            })?;
+        let (direct, api) = transport::clients(&guard, &user_agent, config.max_redirects)?;
         Ok(Self {
-            client,
+            direct,
+            api,
             guard,
-            max_redirects,
-            requests: Arc::new(Semaphore::new(request_limit.get())),
-            user_agent: user_agent_header,
+            requests: Arc::new(Semaphore::new(config.max_concurrent_requests)),
+            max_response_bytes: config.max_response_bytes,
+            user_agent,
         })
     }
     #[inline]
@@ -65,7 +60,16 @@ impl SecureHttpClient {
     }
     #[expect(
         clippy::missing_inline_in_public_items,
-        reason = "HTTP GET performs async network I/O and is not an inline candidate."
+        reason = "URL validation performs DNS I/O within the configured time budget."
+    )]
+    pub async fn validate_url(&self, url: &Url, timeout_seconds: f64) -> Result<()> {
+        tokio::time::timeout(duration(timeout_seconds)?, self.guard.validate_url(url))
+            .await
+            .map_err(|_elapsed| timeout_error())?
+    }
+    #[expect(
+        clippy::missing_inline_in_public_items,
+        reason = "HTTP GET performs async network I/O."
     )]
     pub async fn get(
         &self,
@@ -73,12 +77,12 @@ impl SecureHttpClient {
         headers: HeaderMap,
         timeout_seconds: f64,
     ) -> Result<FetchResponse> {
-        self.get_with_limit(url, headers, timeout_seconds, None)
+        self.get_with_body_limit(url, headers, timeout_seconds, self.max_response_bytes)
             .await
     }
     #[expect(
         clippy::missing_inline_in_public_items,
-        reason = "HTTP GET performs async network I/O and is not an inline candidate."
+        reason = "HTTP GET performs async network I/O."
     )]
     pub async fn get_with_body_limit(
         &self,
@@ -87,114 +91,76 @@ impl SecureHttpClient {
         timeout_seconds: f64,
         max_bytes: usize,
     ) -> Result<FetchResponse> {
-        self.get_with_limit(url, headers, timeout_seconds, Some(max_bytes))
-            .await
-    }
-    async fn get_with_limit(
-        &self,
-        url: &str,
-        headers: HeaderMap,
-        timeout_seconds: f64,
-        body_limit: Option<usize>,
-    ) -> Result<FetchResponse> {
-        let parsed =
-            Url::parse(url).map_err(|error| AppError::client(format!("Invalid URL: {error}")))?;
-        self.request_with_redirects(
-            Method::GET,
-            parsed,
-            headers,
-            None,
+        self.execute(
+            self.direct.get(self.checked_url(url)?).headers(headers),
             timeout_seconds,
-            body_limit,
+            max_bytes,
         )
         .await
     }
     pub(crate) async fn post_json<Payload>(
         &self,
         url: &str,
-        mut headers: HeaderMap,
+        headers: HeaderMap,
         payload: &Payload,
         timeout_seconds: f64,
     ) -> Result<FetchResponse>
     where
         Payload: Serialize + Sync,
     {
-        let parsed =
-            Url::parse(url).map_err(|error| AppError::client(format!("Invalid URL: {error}")))?;
-        let body = sonic_rs::to_vec(payload).map_err(|error| {
+        let encoded = sonic_rs::to_vec(payload).map_err(|error| {
             AppError::internal(format!("failed to encode HTTP JSON request: {error}"))
         })?;
-        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-        let _permit = self.requests.acquire().await.map_err(|error| {
-            AppError::internal(format!(
-                "HTTP request concurrency limiter was closed: {error}"
-            ))
-        })?;
-        self.guard.validate_url(&parsed).await?;
-        let response = self
-            .client
-            .post(parsed)
+        let request = self
+            .api
+            .post(self.checked_url(url)?)
             .headers(headers)
-            .body(body)
-            .timeout(duration(timeout_seconds)?)
-            .send()
-            .await?;
-        collect_response(response, None).await
+            .header(CONTENT_TYPE, "application/json")
+            .body(encoded);
+        self.execute(request, timeout_seconds, self.max_response_bytes)
+            .await
     }
-    async fn request_with_redirects(
+    async fn execute(
         &self,
-        method: Method,
-        mut url: Url,
-        headers: HeaderMap,
-        body: Option<Vec<u8>>,
+        builder: reqwest::RequestBuilder,
         timeout_seconds: f64,
-        body_limit: Option<usize>,
+        max_bytes: usize,
     ) -> Result<FetchResponse> {
-        let _permit = self.requests.acquire().await.map_err(|error| {
-            AppError::internal(format!(
-                "HTTP request concurrency limiter was closed: {error}"
-            ))
-        })?;
-        for redirect_index in 0..=self.max_redirects {
-            self.guard.validate_url(&url).await?;
-            let response = self
-                .client
-                .request(method.clone(), url.clone())
-                .headers(headers.clone())
-                .body(body.clone().unwrap_or_default())
-                .timeout(duration(timeout_seconds)?)
-                .send()
-                .await?;
-            if !response.status().is_redirection() {
-                return collect_response(response, body_limit).await;
-            }
-            let Some(next) = redirect_target(response.headers().get(LOCATION), &url)? else {
-                return collect_response(response, body_limit).await;
-            };
-            if redirect_index == self.max_redirects {
-                return Err(AppError::client("Too many redirects while fetching URL."));
-            }
-            url = next;
-        }
-        Err(AppError::internal("redirect loop exited unexpectedly"))
+        let (client, request) = builder.build_split();
+        let prepared = request?;
+        let pending = async {
+            let _permit = self.requests.acquire().await.map_err(|error| {
+                AppError::internal(format!("HTTP request limiter was closed: {error}"))
+            })?;
+            let response = client.execute(prepared).await?;
+            let status = response.status();
+            let headers = response.headers().clone();
+            let body = body::collect(response, max_bytes.min(self.max_response_bytes)).await?;
+            Ok(FetchResponse {
+                status,
+                headers,
+                body,
+            })
+        };
+        tokio::time::timeout(duration(timeout_seconds)?, pending)
+            .await
+            .map_err(|_elapsed| timeout_error())?
     }
-}
-async fn collect_response(
-    response: reqwest::Response,
-    body_limit: Option<usize>,
-) -> Result<FetchResponse> {
-    let status = response.status();
-    let headers = response.headers().clone();
-    let body = body::collect(response, body_limit).await?;
-    Ok(FetchResponse {
-        status,
-        headers,
-        body,
-    })
+    fn checked_url(&self, url: &str) -> Result<Url> {
+        let parsed =
+            Url::parse(url).map_err(|error| AppError::client(format!("Invalid URL: {error}")))?;
+        self.guard.check_url(&parsed)?;
+        Ok(parsed)
+    }
 }
 fn duration(seconds: f64) -> Result<Duration> {
-    if seconds.is_finite() && seconds > 0.0_f64 {
-        return Ok(Duration::from_secs_f64(seconds));
+    let parsed = Duration::try_from_secs_f64(seconds)
+        .map_err(|error| AppError::config(format!("HTTP timeout is invalid: {error}")))?;
+    if parsed.is_zero() {
+        return Err(AppError::config("HTTP timeout must be positive"));
     }
-    Err(AppError::config("HTTP timeout must be positive"))
+    Ok(parsed)
+}
+fn timeout_error() -> AppError {
+    AppError::Upstream("upstream request timed out. Retry later.".to_owned())
 }

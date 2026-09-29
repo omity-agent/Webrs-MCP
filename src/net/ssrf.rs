@@ -21,6 +21,16 @@ impl SsrfGuard {
         reason = "URL validation may perform DNS lookup and is not an inline candidate."
     )]
     pub async fn validate_url(&self, url: &Url) -> Result<()> {
+        self.check_url(url)?;
+        if self.config.block_private_networks
+            && let Some(Host::Domain(domain)) = url.host()
+        {
+            self.resolve_allowed_domain(domain, url.port_or_known_default().unwrap_or(443))
+                .await?;
+        }
+        Ok(())
+    }
+    pub(crate) fn check_url(&self, url: &Url) -> Result<()> {
         if !matches!(url.scheme(), "http" | "https") {
             return Err(AppError::client("URL must use HTTP or HTTPS."));
         }
@@ -30,26 +40,18 @@ impl SsrfGuard {
         let Some(host) = url.host() else {
             return Err(AppError::client("URL must include a host."));
         };
-        self.validate_host(host, url.port_or_known_default()).await
-    }
-    async fn validate_host(&self, host: Host<&str>, port: Option<u16>) -> Result<()> {
         match host {
             Host::Ipv4(address) => self.validate_ip(IpAddr::V4(address)),
             Host::Ipv6(address) => self.validate_ip(IpAddr::V6(address)),
-            Host::Domain(domain) => self.validate_domain(domain, port).await,
+            Host::Domain(domain) => self.check_domain(domain),
         }
     }
-    async fn validate_domain(&self, domain: &str, port: Option<u16>) -> Result<()> {
+    fn check_domain(&self, domain: &str) -> Result<()> {
         let normalized = domain.trim_end_matches('.').to_ascii_lowercase();
         if self.config.block_local_hostnames && is_local_hostname(&normalized) {
             return Err(AppError::client("URL host is blocked by SSRF protection."));
         }
-        if !self.config.block_private_networks {
-            return Ok(());
-        }
-        self.resolve_allowed_domain(&normalized, port.unwrap_or(443))
-            .await
-            .map(|_addresses| ())
+        Ok(())
     }
     fn validate_ip(&self, address: IpAddr) -> Result<()> {
         if !self.config.block_private_networks || is_public_ip(address) {
@@ -65,9 +67,7 @@ impl SsrfGuard {
         port: u16,
     ) -> Result<Vec<SocketAddr>> {
         let normalized = domain.trim_end_matches('.').to_ascii_lowercase();
-        if self.config.block_local_hostnames && is_local_hostname(&normalized) {
-            return Err(AppError::client("URL host is blocked by SSRF protection."));
-        }
+        self.check_domain(&normalized)?;
         let addresses = lookup_host((normalized.as_str(), port))
             .await
             .map_err(|_error| AppError::client("URL host could not be resolved."))?;

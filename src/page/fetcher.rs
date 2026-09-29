@@ -6,7 +6,7 @@ use crate::{
         shared_probe_fetch,
     },
     error::AppError,
-    net::{SecureHttpClient, SsrfGuard, guard, secure_client_from_config},
+    net::SecureHttpClient,
     page::reader::{PageReader, ReaderCredentials},
 };
 use alloc::sync::Arc;
@@ -38,21 +38,18 @@ pub enum PageSource {
 pub struct PageFetcher {
     config: Arc<AppConfig>,
     http: SecureHttpClient,
-    guard: SsrfGuard,
     reader: PageReader,
 }
 impl PageFetcher {
     #[inline]
-    pub fn new(config: Arc<AppConfig>) -> Result<Self> {
-        let http = secure_client_from_config(&config)?;
-        let guard = guard(&config.ssrf);
+    #[must_use]
+    pub fn new(config: Arc<AppConfig>, http: SecureHttpClient) -> Self {
         let reader = PageReader::new(Arc::clone(&config), http.clone());
-        Ok(Self {
+        Self {
             config,
             http,
-            guard,
             reader,
-        })
+        }
     }
     #[expect(
         clippy::missing_inline_in_public_items,
@@ -79,7 +76,9 @@ impl PageFetcher {
     async fn fetch_direct(&self, url: &str) -> Result<Option<PageContent>> {
         let parsed =
             Url::parse(url).map_err(|error| AppError::client(format!("Invalid URL: {error}")))?;
-        self.guard.validate_url(&parsed).await?;
+        self.http
+            .validate_url(&parsed, self.config.http.direct_fetch_timeout_seconds)
+            .await?;
         let targets = direct_fetch_targets(url, &self.config.direct_fetch);
         let probes = self.shared_probe_fetches(&targets)?;
         let mut attempts = targets

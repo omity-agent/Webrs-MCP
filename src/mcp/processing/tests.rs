@@ -1,4 +1,4 @@
-use super::open_pages;
+use super::{BlockingPool, open_pages};
 use crate::{
     Result,
     config::ChunkingConfig,
@@ -36,7 +36,14 @@ async fn open_returns_successes_alongside_per_request_errors() -> Result<()> {
         overlap_ratio: 0.1_f64,
         max_concurrent_tasks: 1,
     })?;
-    let response = open_pages(&requests, fetched, chunker, Vec::new()).await;
+    let response = open_pages(
+        &requests,
+        fetched,
+        chunker,
+        &BlockingPool::new(1)?,
+        Vec::new(),
+    )
+    .await;
     assert_eq!(response.results.len(), 2);
     let first = response
         .results

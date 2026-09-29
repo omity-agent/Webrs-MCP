@@ -33,17 +33,18 @@ search:
     livecrawl_timeout: 30000 # Exa livecrawl timeout in milliseconds.
   octen:
     endpoint: https://api.octen.ai/search # Octen Web Search endpoint.
-    highlights_max_tokens: 200 # Highlight token budget, from 100 to 20000.
+    highlights_max_tokens: 150 # Highlight token budget, from 100 to 20000.
     format: markdown # Highlight format: text or markdown.
     safesearch: off # Adult-content filter: strict or off.
 
 # HTTP client behavior for all outbound requests.
 http:
   user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 # User-Agent for outbound HTTP requests.
-  timeout_seconds: 120.0 # Search and remote reader timeout.
-  direct_fetch_timeout_seconds: 20.0 # Direct fetch timeout.
+  timeout_seconds: 120.0 # Total search/reader budget including queueing, DNS, redirects and body.
+  direct_fetch_timeout_seconds: 20.0 # Total budget for each direct fetch or probe.
   max_redirects: 5 # Redirect hops after per-hop SSRF validation.
-  max_concurrent_requests: 8 # Maximum concurrent outbound requests per shared HTTP client.
+  max_concurrent_requests: 8 # Shared outbound limit across search, direct fetches and readers.
+  max_response_bytes: 16777216 # Maximum decompressed response bytes, including provider JSON/SSE.
 
 # Jina Reader API behavior.
 jina:
@@ -74,7 +75,7 @@ chunking:
   tokenizer: o200k_base # Tokenizer name.
   chunk_tokens: 4000 # Maximum tokens in one chunk.
   overlap_ratio: 0.1 # Chunk overlap ratio.
-  max_concurrent_tasks: 4 # Maximum concurrent blocking chunking and regex tasks.
+  max_concurrent_tasks: 4 # Shared CPU limit across all tool calls, including cancelled callers.
 
 # Regex find behavior.
 find:

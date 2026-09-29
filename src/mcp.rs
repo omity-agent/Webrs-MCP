@@ -1,5 +1,5 @@
 pub mod handler;
-pub(crate) mod processing;
+pub mod processing;
 pub mod schemas;
 pub mod server;
 pub mod tools;

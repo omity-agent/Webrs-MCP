@@ -111,6 +111,7 @@ finesse = "*"
 futures = { version = "*", public = true }
 http = { version = "*", public = true }
 http-acl = "*"
+http-body-util = "*"
 mime = "*"
 nanoid = "*"
 num-traits = "*"
@@ -144,6 +145,7 @@ tokio = { version = "*", features = [
     "rt-multi-thread",
     "signal",
     "sync",
+    "time",
 ] }
 tracing = "*"
 tracing-subscriber = { version = "*", features = ["env-filter", "fmt"] }

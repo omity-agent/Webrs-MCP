@@ -4,7 +4,7 @@ use crate::{
     config::{AppConfig, SearchConfig},
     error::{AppError, http_service_error},
     models::{SearchQueryRequest, SearchResult},
-    net::{SecureHttpClient, secure_client_from_config},
+    net::SecureHttpClient,
 };
 use bytes::Bytes;
 use futures::future::try_join_all;
@@ -22,12 +22,13 @@ pub struct SearchBatch {
 }
 impl SearchClient {
     #[inline]
-    pub fn new(config: &AppConfig) -> Result<Self> {
-        Ok(Self {
+    #[must_use]
+    pub fn new(config: &AppConfig, http: SecureHttpClient) -> Self {
+        Self {
             config: config.search.clone(),
             timeout_seconds: config.http.timeout_seconds,
-            http: secure_client_from_config(config)?,
-        })
+            http,
+        }
     }
     pub async fn search_many(
         &self,

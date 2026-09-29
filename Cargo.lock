@@ -584,9 +584,9 @@ checksum = "aedcfb3409746eddb02b9e19ebda1c3394f759a152e48ee875a0844d1b955484"
 
 [[package]]
 name = "finesse"
-version = "2.4.0"
+version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6d984395823fa7233e2f7817d471c3408c6abb0faf0c23fedadf4653751c67b"
+checksum = "48ff36e6ba3e7154a84b8bbaea664cc44a665917106b56dee001ae20affa2548"
 
 [[package]]
 name = "flate2"
@@ -2599,6 +2599,7 @@ dependencies = [
  "futures",
  "http",
  "http-acl",
+ "http-body-util",
  "mime",
  "nanoid",
  "num-traits",
