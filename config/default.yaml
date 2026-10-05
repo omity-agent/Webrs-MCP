@@ -9,6 +9,12 @@ server:
   allowed_hosts: [] # Host header allow-list; empty accepts every Host header.
   allowed_origins: [] # Optional browser Origin allow-list; empty disables Origin checks.
 
+# Tool names shared by MCP registration, dispatch, and CLI subcommands.
+tools:
+  search_query: search_query # Search tool name; distinct from the other tool names.
+  open: open # Page-opening tool name.
+  find: find # Page-searching tool name.
+
 # MCP protocol response policies.
 protocol:
   tools_list_cache:
@@ -73,7 +79,7 @@ tinyfish:
 # Token chunking behavior.
 chunking:
   tokenizer: o200k_base # Tokenizer name.
-  chunk_tokens: 4000 # Maximum tokens in one chunk.
+  chunk_tokens: 2500 # Maximum tokens in one chunk.
   overlap_ratio: 0.1 # Chunk overlap ratio.
   max_concurrent_tasks: 4 # Shared CPU limit across all tool calls, including cancelled callers.
 

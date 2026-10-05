@@ -39,15 +39,15 @@ pub(crate) fn http_service(config: &AppConfig) -> Result<Router> {
     }))
 }
 #[inline]
-pub(crate) fn stdio_service(
+pub(crate) fn local_service(
     config: &AppConfig,
     mode: WorkMode,
     credentials: tools::ToolCredentials,
 ) -> Result<tools::ToolService> {
-    let mut stdio_config = config.clone();
-    stdio_config.ssrf.block_private_networks = false;
-    stdio_config.ssrf.block_local_hostnames = false;
-    tools::ToolService::new_with_credentials(stdio_config, credentials, mode)
+    let mut local_config = config.clone();
+    local_config.ssrf.block_private_networks = false;
+    local_config.ssrf.block_local_hostnames = false;
+    tools::ToolService::new_with_credentials(local_config, credentials, mode)
 }
 #[must_use]
 pub(crate) fn streamable_http_config(config: &AppConfig) -> StreamableHttpServerConfig {

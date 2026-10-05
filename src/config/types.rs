@@ -101,6 +101,7 @@ pub struct SsrfConfig {
 #[serde(deny_unknown_fields)]
 pub struct AppConfig {
     pub server: ServerConfig,
+    pub tools: crate::config::ToolNames,
     pub protocol: crate::config::ProtocolConfig,
     pub headers: HeaderConfig,
     pub search: crate::config::SearchConfig,
@@ -115,6 +116,7 @@ pub struct AppConfig {
 impl AppConfig {
     #[inline]
     pub fn validate(&self) -> Result<()> {
+        self.tools.validate()?;
         self.search.validate()?;
         validation::positive(&self.chunking.chunk_tokens, "chunking.chunk_tokens")?;
         validation::positive(

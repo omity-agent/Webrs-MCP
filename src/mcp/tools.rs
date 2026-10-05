@@ -2,7 +2,7 @@ use crate::{
     Result,
     arguments::{find_arguments, open_arguments, search_arguments},
     cli::WorkMode,
-    config::AppConfig,
+    config::{AppConfig, ToolKind},
     error::AppError,
     mcp::processing::{BlockingPool, compile_patterns, find_pages, open_pages},
     models::SearchQueryResponse,
@@ -46,6 +46,7 @@ impl ToolService {
         credentials: ToolCredentials,
         mode: WorkMode,
     ) -> Result<Self> {
+        config.validate()?;
         let shared_config = Arc::new(config);
         let http = secure_client_from_config(&shared_config)?;
         Ok(Self {
@@ -72,14 +73,18 @@ impl ToolService {
         arguments: Option<Value>,
         headers: &HeaderMap,
     ) -> Result<ToolOutput> {
+        let kind = self
+            .config
+            .tools
+            .resolve(name)
+            .ok_or_else(|| AppError::client(format!("Unknown tool: {name}")))?;
         if self.mode == WorkMode::Filesystem {
-            return Ok(self.filesystem_call(name, arguments, headers).await);
+            return Ok(self.filesystem_call(kind, arguments, headers).await);
         }
-        match name {
-            "search_query" => self.search_query(arguments, headers).await,
-            "open" => self.open(arguments, headers).await,
-            "find" => self.find(arguments, headers).await,
-            other => Err(AppError::client(format!("Unknown tool: {other}"))),
+        match kind {
+            ToolKind::Search => self.search_query(arguments, headers).await,
+            ToolKind::Open => self.open(arguments, headers).await,
+            ToolKind::Find => self.find(arguments, headers).await,
         }
     }
     async fn search_query(

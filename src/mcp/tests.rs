@@ -3,13 +3,15 @@ use crate::{
     cli::WorkMode,
     config,
     mcp::{
-        schemas, stdio_service, streamable_http_config, tools::ToolCredentials, tools::ToolService,
+        local_service, schemas, streamable_http_config, tools::ToolCredentials, tools::ToolService,
     },
 };
 use rmcp::{ServerHandler, model::ProtocolVersion};
 #[test]
 fn rmcp_tools_expose_expected_schemas() {
-    let tools = schemas::tools(WorkMode::Response).unwrap_or_else(|error| panic!("{error}"));
+    let config = config::load_embedded().unwrap_or_else(|error| panic!("{error}"));
+    let tools =
+        schemas::tools(&config.tools, WorkMode::Response).unwrap_or_else(|error| panic!("{error}"));
     let names = tools
         .iter()
         .map(|tool| tool.name.as_ref())
@@ -58,7 +60,9 @@ fn rmcp_tools_expose_expected_schemas() {
 }
 #[test]
 fn filesystem_mode_exposes_only_file_backed_tools() {
-    let tools = schemas::tools(WorkMode::Filesystem).unwrap_or_else(|error| panic!("{error}"));
+    let config = config::load_embedded().unwrap_or_else(|error| panic!("{error}"));
+    let tools = schemas::tools(&config.tools, WorkMode::Filesystem)
+        .unwrap_or_else(|error| panic!("{error}"));
     let names = tools
         .iter()
         .map(|tool| tool.name.as_ref())
@@ -150,7 +154,7 @@ fn streamable_http_keeps_strict_metadata_as_the_default_policy() {
 #[test]
 fn stdio_service_allows_private_network_urls() {
     let config = config::load_embedded().unwrap_or_else(|error| panic!("{error}"));
-    let service = stdio_service(
+    let service = local_service(
         &config,
         WorkMode::Response,
         ToolCredentials {

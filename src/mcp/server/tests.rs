@@ -23,7 +23,8 @@ fn server_discovery_advertises_both_supported_revisions() {
 #[test]
 fn tools_list_has_required_cache_fields() {
     let config = config::load_embedded().unwrap_or_else(|error| panic!("{error}"));
-    let tools = schemas::tools(WorkMode::Response).unwrap_or_else(|error| panic!("{error}"));
+    let tools =
+        schemas::tools(&config.tools, WorkMode::Response).unwrap_or_else(|error| panic!("{error}"));
     let result = list_tools_result(&config, tools, Some(&ProtocolVersion::V_2026_07_28));
     assert_eq!(result.ttl_ms, Some(3_600_000));
     assert_eq!(result.cache_scope, Some(CacheScope::Public));

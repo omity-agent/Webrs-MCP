@@ -1,6 +1,7 @@
 use crate::{
     Result,
     cli::WorkMode,
+    config::ToolNames,
     error::AppError,
     models::{
         FilesystemOpenArguments, FilesystemResponse, FilesystemSearchArguments, FindArguments,
@@ -11,39 +12,44 @@ use alloc::sync::Arc;
 use rmcp::model::{JsonObject, Tool};
 use schemars::{JsonSchema, generate::SchemaSettings, schema_for, transform::RestrictFormats};
 #[inline]
-pub fn tools(mode: WorkMode) -> Result<Vec<Tool>> {
+pub fn tools(names: &ToolNames, mode: WorkMode) -> Result<Vec<Tool>> {
     if mode == WorkMode::Filesystem {
         return Ok(vec![
             tool::<FilesystemSearchArguments, FilesystemResponse>(
-                "search_query",
+                &names.search_query,
                 "Search for pages.",
             )?,
-            tool::<FilesystemOpenArguments, FilesystemResponse>("open", "Fetch the pages.")?,
+            tool::<FilesystemOpenArguments, FilesystemResponse>(&names.open, "Fetch the pages.")?,
         ]);
     }
     Ok(vec![
         tool::<SearchQueryArguments, SearchQueryResponse>(
-            "search_query",
+            &names.search_query,
             "返回标题、日期、URL 与高亮内容。",
         )?,
-        tool::<OpenArguments, OpenResponse>("open", "Open the page indicated by `url`.")?,
+        tool::<OpenArguments, OpenResponse>(&names.open, "Open the page indicated by `url`.")?,
         tool::<FindArguments, FindResponse>(
-            "find",
+            &names.find,
             "Find the text `pattern` in the page indicated by `url`.",
         )?,
     ])
 }
 #[inline]
-pub fn tool_by_name(mode: WorkMode, name: &str) -> Result<Option<Tool>> {
-    Ok(tools(mode)?.into_iter().find(|tool| tool.name == name))
+pub fn tool_by_name(names: &ToolNames, mode: WorkMode, name: &str) -> Result<Option<Tool>> {
+    Ok(tools(names, mode)?
+        .into_iter()
+        .find(|tool| tool.name == name))
 }
-fn tool<I, O>(name: &'static str, description: &'static str) -> Result<Tool>
+fn tool<I, O>(name: &str, description: &'static str) -> Result<Tool>
 where
     I: JsonSchema,
     O: JsonSchema,
 {
     let output_schema = output_schema::<O>()?;
-    Ok(Tool::new(name, description, schema_object::<I>()?).with_raw_output_schema(output_schema))
+    Ok(
+        Tool::new(name.to_owned(), description, schema_object::<I>()?)
+            .with_raw_output_schema(output_schema),
+    )
 }
 fn output_schema<T>() -> Result<Arc<JsonObject>>
 where

@@ -4,6 +4,7 @@ use super::{
 };
 use crate::{
     Result,
+    config::ToolKind,
     error::AppError,
     models::{FilesystemResponse, FilesystemSearchArguments},
     page::{PageContent, reader::ReaderCredentials},
@@ -25,14 +26,17 @@ struct PageTarget {
 impl ToolService {
     pub(super) async fn filesystem_call(
         &self,
-        name: &str,
+        kind: ToolKind,
         arguments: Option<Value>,
         headers: &HeaderMap,
     ) -> ToolOutput {
-        let result = match name {
-            "search_query" => self.filesystem_search(arguments, headers).await,
-            "open" => self.filesystem_open(arguments, headers).await,
-            other => Err(AppError::client(format!("Unknown tool: {other}"))),
+        let result = match kind {
+            ToolKind::Search => self.filesystem_search(arguments, headers).await,
+            ToolKind::Open => self.filesystem_open(arguments, headers).await,
+            ToolKind::Find => Err(AppError::client(format!(
+                "{} is unavailable in filesystem mode",
+                self.config.tools.find
+            ))),
         };
         ToolOutput::Filesystem(result.unwrap_or_else(|error| failure_response(&error)))
     }

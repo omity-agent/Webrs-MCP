@@ -1,5 +1,6 @@
 use crate::{
     Result,
+    cli::oneshot::OutputFormat,
     error::AppError,
     models::{
         FilesystemResponse, FindMatch, FindResponse, OpenPage, OpenResponse, OpenResult,
@@ -10,6 +11,8 @@ use crate::{
 mod tests;
 mod writer;
 use writer::PseudoXml;
+#[derive(serde :: Serialize)]
+#[serde(untagged)]
 pub(crate) enum ToolOutput {
     Search(SearchQueryResponse),
     Open(OpenResponse),
@@ -17,16 +20,32 @@ pub(crate) enum ToolOutput {
     Filesystem(FilesystemResponse),
 }
 impl ToolOutput {
+    pub(crate) fn structured(&self) -> Result<rmcp::serde_json::Value> {
+        rmcp::serde_json::to_value(self)
+            .map_err(|error| AppError::internal(format!("failed to encode tool response: {error}")))
+    }
+    pub(crate) fn formatted(&self, format: OutputFormat) -> Result<String> {
+        match format {
+            OutputFormat::Xml => Ok(self.standard_text()),
+            OutputFormat::Json => sonic_rs::to_string(self).map_err(|error| {
+                AppError::internal(format!("failed to encode tool response: {error}"))
+            }),
+        }
+    }
     #[expect(
         clippy::pattern_type_mismatch,
-        reason = "Matching borrowed output variants avoids cloning response models."
+        reason = "Borrowing output variants keeps failure messages in their response models."
     )]
-    pub(crate) fn structured(&self) -> Result<rmcp::serde_json::Value> {
+    pub(crate) fn failure(&self) -> Option<&str> {
         match self {
-            Self::Search(response) => to_value(response),
-            Self::Open(response) => to_value(response),
-            Self::Find(response) => to_value(response),
-            Self::Filesystem(response) => to_value(response),
+            Self::Open(response) => response.results.iter().find_map(|result| match result {
+                OpenResult::Failure { url: _, error } => Some(error.as_str()),
+                OpenResult::Success { url: _, page: _ } => None,
+            }),
+            Self::Filesystem(response) => {
+                (!response.error.is_empty()).then_some(response.error.as_str())
+            }
+            Self::Search(_) | Self::Find(_) => None,
         }
     }
     #[must_use]
@@ -49,13 +68,6 @@ fn filesystem_text(response: &FilesystemResponse) -> String {
     xml.text("ERROR", &response.error);
     xml.text("WARNING", &response.warning);
     xml.finish()
-}
-fn to_value<T>(value: &T) -> Result<rmcp::serde_json::Value>
-where
-    T: serde::Serialize,
-{
-    rmcp::serde_json::to_value(value)
-        .map_err(|error| AppError::internal(format!("failed to encode tool response: {error}")))
 }
 fn search_text(response: &SearchQueryResponse) -> String {
     let mut xml = PseudoXml::new();

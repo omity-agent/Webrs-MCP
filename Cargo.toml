@@ -104,10 +104,16 @@ chrono = { version = "*", default-features = false, features = [
     "clock",
     "std",
 ] }
-clap = { version = "*", features = ["derive"] }
+clap = { git = "https://github.com/clap-rs/clap", features = [
+    "derive",
+    "deprecated",
+    "string",
+    "wrap_help",
+], public = true }
+clap_builder = { git = "https://github.com/clap-rs/clap", public = true }
 content_inspector = "*"
-fancy-regex = { version = "*", public = true }
-finesse = "*"
+fancy-regex = { git = "https://github.com/fancy-regex/fancy-regex", public = true }
+finesse = { git = "https://github.com/ecmwf/aviso-client" }
 futures = { version = "*", public = true }
 http = { version = "*", public = true }
 http-acl = "*"
@@ -118,7 +124,7 @@ nanoid = "*"
 num-traits = "*"
 path-slash = "*"
 percent-encoding = "*"
-reqwest = { git = "https://github.com/seanmonstar/reqwest.git", default-features = false, features = [
+reqwest = { git = "https://github.com/seanmonstar/reqwest", default-features = false, features = [
     "deflate",
     "gzip",
     "json",
@@ -133,7 +139,7 @@ rmcp = { git = "https://github.com/modelcontextprotocol/rust-sdk", features = [
 ], public = true }
 schemars = { version = "*", features = ["derive"] }
 serde = { version = "*", features = ["derive"], public = true }
-serde-saphyr = { git = "https://github.com/bourumir-wyngs/serde-saphyr.git" }
+serde-saphyr = { git = "https://github.com/bourumir-wyngs/serde-saphyr" }
 sonic-rs = { version = "*", public = true }
 strsim = "*"
 thiserror = "*"

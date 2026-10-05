@@ -1,12 +1,14 @@
 use crate::{
     Result,
-    cli::{RuntimeOptions, Transport, WorkMode},
+    cli::{RuntimeOptions, Transport, WorkMode, oneshot::Invocation},
     config::AppConfig,
+    error::AppError,
     mcp::{self, handler::health, http_service, tools::ToolCredentials},
 };
 use axum::{Router, routing::get};
 use core::net::SocketAddr;
 use rmcp::{serve_server, transport::stdio};
+use std::io::Write as _;
 use tokio::net::TcpListener;
 use tracing::info;
 const STREAMABLE_HTTP_PATH: &str = "/mcp";
@@ -17,10 +19,37 @@ const HEALTH_PATH: &str = "/health";
 )]
 pub async fn run(config: AppConfig, options: RuntimeOptions) -> anyhow::Result<()> {
     options.validate().map_err(anyhow::Error::from)?;
+    if let Some(invocation) = options.invocation {
+        return run_command(config, options.credentials, invocation).await;
+    }
     match options.transport {
         Transport::Http => run_http(config).await,
         Transport::Stdio => run_stdio(config, options.mode, options.credentials).await,
     }
+}
+async fn run_command(
+    config: AppConfig,
+    credentials: ToolCredentials,
+    invocation: Invocation,
+) -> anyhow::Result<()> {
+    let service = mcp::local_service(&config, WorkMode::Response, credentials)?;
+    let (kind, arguments) = invocation.request.into_arguments()?;
+    let output = service
+        .call(
+            config.tools.name(kind),
+            Some(arguments),
+            &http::HeaderMap::new(),
+        )
+        .await?;
+    writeln!(
+        std::io::stdout().lock(),
+        "{}",
+        output.formatted(invocation.format)?
+    )?;
+    if let Some(message) = output.failure() {
+        return Err(AppError::client(message).into());
+    }
+    Ok(())
 }
 async fn run_http(config: AppConfig) -> anyhow::Result<()> {
     let address = SocketAddr::new(config.server.host.parse()?, config.server.port);
@@ -39,7 +68,7 @@ pub async fn run_stdio(
     mode: WorkMode,
     credentials: ToolCredentials,
 ) -> anyhow::Result<()> {
-    let service = mcp::stdio_service(&config, mode, credentials)?;
+    let service = mcp::local_service(&config, mode, credentials)?;
     info!("web MCP server listening on stdio");
     let running = serve_server(service, stdio()).await?;
     let quit_reason = running.waiting().await?;

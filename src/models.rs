@@ -1,6 +1,6 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, clap :: ValueEnum)]
 #[serde(rename_all = "kebab-case")]
 #[expect(
     clippy::exhaustive_enums,
@@ -9,12 +9,15 @@ use serde::{Deserialize, Serialize};
 pub enum SearchCategory {
     Company,
     #[serde(rename = "research paper")]
+    #[value(name = "research paper")]
     ResearchPaper,
     News,
     Pdf,
     #[serde(rename = "personal site")]
+    #[value(name = "personal site")]
     PersonalSite,
     #[serde(rename = "financial report")]
+    #[value(name = "financial report")]
     FinancialReport,
     People,
 }

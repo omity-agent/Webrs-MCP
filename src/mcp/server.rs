@@ -49,7 +49,7 @@ impl ServerHandler for ToolService {
         _request: Option<PaginatedRequestParams>,
         context: RequestContext<RoleServer>,
     ) -> impl Future<Output = Result<ListToolsResult, McpError>> + MaybeSendFuture + '_ {
-        let result = schemas::tools(self.mode())
+        let result = schemas::tools(&self.config().tools, self.mode())
             .map(|tools| {
                 list_tools_result(self.config(), tools, context.protocol_version().as_ref())
             })
@@ -58,7 +58,9 @@ impl ServerHandler for ToolService {
     }
     #[inline]
     fn get_tool(&self, name: &str) -> Option<Tool> {
-        schemas::tool_by_name(self.mode(), name).ok().flatten()
+        schemas::tool_by_name(&self.config().tools, self.mode(), name)
+            .ok()
+            .flatten()
     }
     #[inline]
     #[expect(
@@ -72,7 +74,7 @@ impl ServerHandler for ToolService {
     ) -> impl Future<Output = Result<CallToolResponse, McpError>> + MaybeSendFuture + '_ {
         async move {
             let tool_name = request.name.as_ref();
-            if schemas::tool_by_name(self.mode(), tool_name)
+            if schemas::tool_by_name(&self.config().tools, self.mode(), tool_name)
                 .map_err(to_mcp_error)?
                 .is_none()
             {
