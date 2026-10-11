@@ -6,13 +6,14 @@ use crate::{
 };
 use alloc::sync::Arc;
 use bytes::Bytes;
-use core::time::Duration;
 use reqwest::{
     StatusCode, Url,
     header::{CONTENT_TYPE, HeaderMap, HeaderValue},
 };
 use serde::Serialize;
 use tokio::sync::Semaphore;
+mod request_budget;
+mod resolution;
 #[derive(Clone)]
 pub struct SecureHttpClient {
     direct: reqwest::Client,
@@ -57,15 +58,6 @@ impl SecureHttpClient {
     #[must_use]
     pub fn user_agent(&self) -> HeaderValue {
         self.user_agent.clone()
-    }
-    #[expect(
-        clippy::missing_inline_in_public_items,
-        reason = "URL validation performs DNS I/O within the configured time budget."
-    )]
-    pub async fn validate_url(&self, url: &Url, timeout_seconds: f64) -> Result<()> {
-        tokio::time::timeout(duration(timeout_seconds)?, self.guard.validate_url(url))
-            .await
-            .map_err(|_elapsed| timeout_error())?
     }
     #[expect(
         clippy::missing_inline_in_public_items,
@@ -126,13 +118,7 @@ impl SecureHttpClient {
         timeout_seconds: f64,
         max_bytes: usize,
     ) -> Result<FetchResponse> {
-        let (client, request) = builder.build_split();
-        let prepared = request?;
-        let pending = async {
-            let _permit = self.requests.acquire().await.map_err(|error| {
-                AppError::internal(format!("HTTP request limiter was closed: {error}"))
-            })?;
-            let response = client.execute(prepared).await?;
+        self.with_response(builder, timeout_seconds, async |response| {
             let status = response.status();
             let headers = response.headers().clone();
             let body = body::collect(response, max_bytes.min(self.max_response_bytes)).await?;
@@ -141,10 +127,8 @@ impl SecureHttpClient {
                 headers,
                 body,
             })
-        };
-        tokio::time::timeout(duration(timeout_seconds)?, pending)
-            .await
-            .map_err(|_elapsed| timeout_error())?
+        })
+        .await
     }
     fn checked_url(&self, url: &str) -> Result<Url> {
         let parsed =
@@ -152,15 +136,4 @@ impl SecureHttpClient {
         self.guard.check_url(&parsed)?;
         Ok(parsed)
     }
-}
-fn duration(seconds: f64) -> Result<Duration> {
-    let parsed = Duration::try_from_secs_f64(seconds)
-        .map_err(|error| AppError::config(format!("HTTP timeout is invalid: {error}")))?;
-    if parsed.is_zero() {
-        return Err(AppError::config("HTTP timeout must be positive"));
-    }
-    Ok(parsed)
-}
-fn timeout_error() -> AppError {
-    AppError::Upstream("upstream request timed out. Retry later.".to_owned())
 }

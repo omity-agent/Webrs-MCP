@@ -17,6 +17,6 @@ fn direct_request_headers_do_not_send_range() {
         "https://example.com/page",
         "https://example.com/page.txt".to_owned(),
     );
-    let headers = request_headers(&client, &target).unwrap_or_else(|error| panic!("{error}"));
+    let headers = request_headers(&client, &target);
     assert!(!headers.contains_key(reqwest::header::RANGE));
 }

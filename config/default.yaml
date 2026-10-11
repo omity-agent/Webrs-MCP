@@ -102,8 +102,23 @@ direct_fetch:
     - gitlab.com
   bitbucket_hosts: # Bitbucket-style hosts.
     - bitbucket.org
-  microsoft_learn_hosts: # Microsoft Learn hosts that expose Markdown with an accept query parameter.
+  microsoft_learn_hosts: # Microsoft Learn documentation hosts supporting Markdown negotiation.
     - learn.microsoft.com
+  microsoft_learn_excluded_sections: # Non-documentation sections, matched after an optional locale segment.
+    - answers
+    - training
+    - credentials
+    - certifications
+    - shows
+    - events
+    - qna
+    - users
+    - profile
+    - topics
+    - search
+    - collections
+    - plans
+    - assessments
   stack_overflow_hosts: # Stack Overflow hosts handled through Stack Exchange API.
     - stackoverflow.com
     - www.stackoverflow.com

@@ -18,7 +18,7 @@ fn markdown_fallback_targets_require_markdown_content_type() -> Result<()> {
     assert!(
         targets
             .iter()
-            .all(|target| { target.required_content_type.as_deref() == Some("text/markdown") })
+            .all(|target| { target.response_format == crate::direct::ResponseFormat::Markdown })
     );
     assert_eq!(
         markdown_target.request_url,

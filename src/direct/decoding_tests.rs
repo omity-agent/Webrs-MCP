@@ -1,54 +1,16 @@
 use crate::{
     Result, config,
     direct::{
-        DirectFetchTarget, ResponseFormat, content::extract_content,
-        mediawiki::extract_mediawiki_content, resolve_direct_fetch_target,
-        stack_overflow::format_stack_overflow_question_json,
+        DirectFetchTarget,
+        content::extract_content,
+        resolve_direct_fetch_target,
+        sites::{
+            mediawiki::extract_mediawiki_content,
+            stack_overflow::format_stack_overflow_question_json,
+        },
     },
 };
 use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue};
-#[test]
-#[expect(
-    clippy::panic_in_result_fn,
-    reason = "The test uses assertions while Result keeps setup failures readable."
-)]
-fn github_blob_resolves_to_raw_text_url() -> Result<()> {
-    let config = config::load_embedded()?;
-    let target = resolve_direct_fetch_target(
-        "https://github.com/modelcontextprotocol/python-sdk/blob/main/README.md",
-        &config.direct_fetch,
-    )
-    .ok_or_else(|| crate::error::AppError::internal("github target was not resolved"))?;
-    assert_eq!(
-        target.request_url,
-        "https://raw.githubusercontent.com/modelcontextprotocol/python-sdk/main/README.md"
-    );
-    assert_eq!(target.response_format, ResponseFormat::Text);
-    Ok(())
-}
-#[test]
-#[expect(
-    clippy::panic_in_result_fn,
-    reason = "The test uses assertions while Result keeps setup failures readable."
-)]
-fn scoped_npm_package_uses_registry_json() -> Result<()> {
-    let config = config::load_embedded()?;
-    let target = resolve_direct_fetch_target(
-        "https://www.npmjs.com/package/@types/node",
-        &config.direct_fetch,
-    )
-    .ok_or_else(|| crate::error::AppError::internal("npm target was not resolved"))?;
-    assert_eq!(
-        target.request_url,
-        "https://registry.npmjs.org/@types%2Fnode"
-    );
-    assert_eq!(
-        target.json_fields_first,
-        ["name", "description", "readme", "repository"]
-    );
-    assert_eq!(target.json_fields_last, ["versions"]);
-    Ok(())
-}
 #[test]
 #[expect(
     clippy::panic_in_result_fn,
@@ -70,7 +32,7 @@ fn npm_registry_json_starts_with_selected_package_fields() -> Result<()> {
         "dist-tags": {"latest": "1.0.0"},
         "versions": {"1.0.0": {"name": "example"}}
     }"##;
-    let content = extract_content(&target, 200, &HeaderMap::new(), body, &config.direct_fetch)?;
+    let content = extract_content(&target, 200, &json_headers(), body)?;
     let expected_prefix = concat!(
         "{\n  \"name\": \"example\",\n",
         "  \"description\": \"Example package\",\n",
@@ -83,28 +45,6 @@ fn npm_registry_json_starts_with_selected_package_fields() -> Result<()> {
     );
     assert!(content.contains("\"_id\": \"example\""));
     assert!(content.ends_with("  }\n}"));
-    Ok(())
-}
-#[test]
-#[expect(
-    clippy::panic_in_result_fn,
-    reason = "The test uses assertions while Result keeps setup failures readable."
-)]
-fn stack_overflow_question_resolves_to_api_json() -> Result<()> {
-    let config = config::load_embedded()?;
-    let target = resolve_direct_fetch_target(
-        "https://stackoverflow.com/questions/11828270/how-do-i-exit-vim",
-        &config.direct_fetch,
-    )
-    .ok_or_else(|| crate::error::AppError::internal("Stack Overflow target was not resolved"))?;
-    assert_eq!(
-        target.request_url,
-        "https://api.stackexchange.com/2.3/questions/11828270?order=desc&sort=votes&site=stackoverflow&page=1&pagesize=100&filter=W-vZ8WEHVi3D2JhQe1m8l90EjOxo6eCsb6b_6yfX0_p"
-    );
-    assert_eq!(
-        target.response_format,
-        ResponseFormat::StackOverflowQuestionJson
-    );
     Ok(())
 }
 #[test]
@@ -168,13 +108,12 @@ fn mediawiki_reports_api_error_code() {
     reason = "The test uses assertions while Result keeps setup failures readable."
 )]
 fn json_crlf_line_endings_are_normalized_to_lf() -> Result<()> {
-    let config = config::load_embedded()?;
     let target = DirectFetchTarget::mediawiki(
         "https://en.wikipedia.org/wiki/Rust",
         "https://en.wikipedia.org/w/api.php".to_owned(),
     );
     let body = br#"{"query":{"pages":[{"revisions":[{"slots":{"main":{"content":"line1\r\nline2\r\n"}}}]}]}}"# ;
-    let content = extract_content(&target, 200, &HeaderMap::new(), body, &config.direct_fetch)?;
+    let content = extract_content(&target, 200, &json_headers(), body)?;
     assert!(!content.contains('\r'));
     assert_eq!(content, "line1\nline2\n");
     Ok(())
@@ -184,17 +123,22 @@ fn json_crlf_line_endings_are_normalized_to_lf() -> Result<()> {
     clippy::panic_in_result_fn,
     reason = "The test uses assertions while Result keeps content extraction failures readable."
 )]
-fn required_content_type_uses_mime_essence() -> Result<()> {
-    let config = config::load_embedded()?;
-    let target = DirectFetchTarget::markdown_accept("https://example.com/page");
+fn markdown_media_type_uses_mime_essence() -> Result<()> {
+    let target =
+        DirectFetchTarget::markdown("https://example.com/page", "https://example.com/page");
     let mut headers = HeaderMap::new();
     headers.insert(
         CONTENT_TYPE,
         HeaderValue::from_static("Text/Markdown; charset=utf-8"),
     );
     assert_eq!(
-        extract_content(&target, 200, &headers, b"# Page", &config.direct_fetch)?,
+        extract_content(&target, 200, &headers, b"# Page")?,
         "# Page"
     );
     Ok(())
+}
+fn json_headers() -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+    headers
 }

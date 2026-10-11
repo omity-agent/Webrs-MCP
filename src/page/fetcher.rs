@@ -1,10 +1,7 @@
 use crate::{
     Result,
     config::AppConfig,
-    direct::{
-        DirectFetchTarget, SharedProbeFetch, fetch_direct_text, fetch_direct_text_with_probe,
-        shared_probe_fetch,
-    },
+    direct::{DirectFetchTarget, SharedProbeFetch, fetch_direct_text, shared_probe_fetch},
     error::AppError,
     net::SecureHttpClient,
     page::reader::{PageReader, ReaderCredentials},
@@ -14,7 +11,6 @@ use futures::{StreamExt as _, stream::FuturesUnordered};
 use std::collections::HashMap;
 use targets::direct_fetch_targets;
 use tracing::warn;
-use url::Url;
 mod batch;
 mod targets;
 #[cfg(test)]
@@ -74,13 +70,12 @@ impl PageFetcher {
         })
     }
     async fn fetch_direct(&self, url: &str) -> Result<Option<PageContent>> {
-        let parsed =
-            Url::parse(url).map_err(|error| AppError::client(format!("Invalid URL: {error}")))?;
-        self.http
-            .validate_url(&parsed, self.config.http.direct_fetch_timeout_seconds)
+        let resolved = self
+            .http
+            .resolve_url(url, self.config.http.direct_fetch_timeout_seconds)
             .await?;
-        let targets = direct_fetch_targets(url, &self.config.direct_fetch);
-        let probes = self.shared_probe_fetches(&targets)?;
+        let targets = direct_fetch_targets(resolved.as_str(), &self.config.direct_fetch);
+        let probes = self.shared_probe_fetches(&targets);
         let mut attempts = targets
             .into_iter()
             .map(|target| {
@@ -90,24 +85,14 @@ impl PageFetcher {
                     .as_ref()
                     .and_then(|probe_url| probes.get(probe_url).cloned());
                 async move {
-                    let result = if let Some(probe) = probe_fetch {
-                        fetch_direct_text_with_probe(
-                            &self.http,
-                            &target,
-                            &self.config.direct_fetch,
-                            &self.config.http,
-                            probe,
-                        )
-                        .await
-                    } else {
-                        fetch_direct_text(
-                            &self.http,
-                            &target,
-                            &self.config.direct_fetch,
-                            &self.config.http,
-                        )
-                        .await
-                    };
+                    let result = fetch_direct_text(
+                        &self.http,
+                        &target,
+                        &self.config.direct_fetch,
+                        &self.config.http,
+                        probe_fetch,
+                    )
+                    .await;
                     (request_url, result)
                 }
             })
@@ -137,7 +122,7 @@ impl PageFetcher {
     fn shared_probe_fetches(
         &self,
         targets: &[DirectFetchTarget],
-    ) -> Result<HashMap<String, SharedProbeFetch>> {
+    ) -> HashMap<String, SharedProbeFetch> {
         let mut probes = HashMap::new();
         for target in targets {
             let Some(probe_url) = target.similarity_probe_url.as_deref() else {
@@ -152,10 +137,10 @@ impl PageFetcher {
                 target,
                 &self.config.direct_fetch,
                 &self.config.http,
-            )?;
+            );
             probes.insert(probe_url.to_owned(), probe);
         }
-        Ok(probes)
+        probes
     }
     fn missing_reader_credentials_error(&self) -> AppError {
         AppError::client(format!(

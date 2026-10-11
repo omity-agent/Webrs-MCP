@@ -35,6 +35,7 @@ missing_panics_doc = "allow"
 missing_trait_methods = "allow"
 module_name_repetitions = "allow"
 multiple_crate_versions = "allow"
+must_use_without_reason = "allow"
 non_ascii_literal = "allow"
 panic = "allow"
 print_stderr = "allow"
@@ -119,7 +120,6 @@ http = { version = "*", public = true }
 http-acl = "*"
 http-body-util = "*"
 mime = "*"
-mimalloc = "*"
 nanoid = "*"
 num-traits = "*"
 path-slash = "*"
@@ -140,7 +140,11 @@ rmcp = { git = "https://github.com/modelcontextprotocol/rust-sdk", features = [
 schemars = { version = "*", features = ["derive"] }
 serde = { version = "*", features = ["derive"], public = true }
 serde-saphyr = { git = "https://github.com/bourumir-wyngs/serde-saphyr" }
-sonic-rs = { version = "*", public = true }
+snmalloc-rs = { git = "https://github.com/microsoft/snmalloc", features = [
+    "native-cpu",
+    "lto",
+] }
+sonic-rs = { git = "https://github.com/cloudwego/sonic-rs", public = true }
 strsim = "*"
 thiserror = "*"
 tiktoken = "*"

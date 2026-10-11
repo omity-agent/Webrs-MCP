@@ -76,3 +76,18 @@ pub fn tinyfish(config: &crate::config::TinyFishConfig) -> Result<()> {
     }
     Ok(())
 }
+pub fn learn_sections(sections: &[String]) -> Result<()> {
+    if sections.is_empty()
+        || sections.iter().any(|section| {
+            section.is_empty()
+                || !section
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+        })
+    {
+        return Err(AppError::config(
+            "direct_fetch.microsoft_learn_excluded_sections must contain nonempty path segments.",
+        ));
+    }
+    Ok(())
+}

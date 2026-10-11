@@ -1,43 +1,52 @@
 use crate::{
     Result,
     config::{DirectFetchConfig, HttpConfig},
-    direct::target::{DirectFetchTarget, ResponseFormat},
-    error::AppError,
+    direct::{
+        content::extract_content,
+        target::{DirectFetchTarget, ResponseFormat},
+    },
     net::{FetchResponse, SecureHttpClient},
 };
+use alloc::sync::Arc;
 use futures::future::{BoxFuture, Shared, join};
-use probe::extract_direct_content;
 use reqwest::header::{ACCEPT, HeaderMap, HeaderValue, USER_AGENT};
-pub(crate) type SharedProbeFetch = Shared<BoxFuture<'static, Result<FetchResponse>>>;
+pub(crate) type SharedProbeFetch = Shared<BoxFuture<'static, Result<Option<Arc<str>>>>>;
 pub(crate) async fn fetch_direct_text(
     client: &SecureHttpClient,
     target: &DirectFetchTarget,
     direct_config: &DirectFetchConfig,
     http_config: &HttpConfig,
+    probe_fetch: Option<SharedProbeFetch>,
 ) -> Result<String> {
-    let headers = request_headers(client, target)?;
-    let (response, probe_response) =
-        fetch_target_responses(client, target, headers, direct_config, http_config).await?;
-    extract_direct_content(target, &response, probe_response, direct_config)
-}
-pub(crate) async fn fetch_direct_text_with_probe(
-    client: &SecureHttpClient,
-    target: &DirectFetchTarget,
-    direct_config: &DirectFetchConfig,
-    http_config: &HttpConfig,
-    probe_fetch: SharedProbeFetch,
-) -> Result<String> {
-    let headers = request_headers(client, target)?;
-    let main_fetch = fetch_response(
-        client,
-        &target.request_url,
-        headers,
-        direct_config,
-        http_config,
-    );
-    let (response_result, probe_result) = join(main_fetch, probe_fetch).await;
-    let response = response_result?;
-    extract_direct_content(target, &response, Some(probe_result), direct_config)
+    let headers = request_headers(client, target);
+    let main_fetch = async {
+        let response = fetch_response(
+            client,
+            &target.request_url,
+            headers,
+            direct_config,
+            http_config,
+        )
+        .await?;
+        extract_content(
+            target,
+            response.status.as_u16(),
+            &response.headers,
+            &response.body,
+        )
+    };
+    let probe = async {
+        match probe_fetch {
+            Some(fetch) => fetch.await,
+            None => Ok(None),
+        }
+    };
+    let (content_result, probe_result) = join(main_fetch, probe).await;
+    let content = content_result?;
+    if let Some(probe_content) = probe_result? {
+        probe::reject_if_similar(&content, &probe_content, direct_config)?;
+    }
+    Ok(content)
 }
 #[inline]
 pub(crate) fn shared_probe_fetch(
@@ -46,39 +55,8 @@ pub(crate) fn shared_probe_fetch(
     target: &DirectFetchTarget,
     direct_config: &DirectFetchConfig,
     http_config: &HttpConfig,
-) -> Result<SharedProbeFetch> {
+) -> SharedProbeFetch {
     probe::shared_probe_fetch(client, probe_url, target, direct_config, http_config)
-}
-async fn fetch_target_responses(
-    client: &SecureHttpClient,
-    target: &DirectFetchTarget,
-    headers: HeaderMap,
-    direct_config: &DirectFetchConfig,
-    http_config: &HttpConfig,
-) -> Result<(FetchResponse, Option<Result<FetchResponse>>)> {
-    let Some(probe_url) = target.similarity_probe_url.as_deref() else {
-        return Ok((
-            fetch_response(
-                client,
-                &target.request_url,
-                headers,
-                direct_config,
-                http_config,
-            )
-            .await?,
-            None,
-        ));
-    };
-    let main_fetch = fetch_response(
-        client,
-        &target.request_url,
-        headers.clone(),
-        direct_config,
-        http_config,
-    );
-    let probe_fetch = fetch_response(client, probe_url, headers, direct_config, http_config);
-    let (main_result, probe_result) = join(main_fetch, probe_fetch).await;
-    Ok((main_result?, Some(probe_result)))
 }
 async fn fetch_response(
     client: &SecureHttpClient,
@@ -96,35 +74,20 @@ async fn fetch_response(
         )
         .await
 }
-fn request_headers(client: &SecureHttpClient, target: &DirectFetchTarget) -> Result<HeaderMap> {
+fn request_headers(client: &SecureHttpClient, target: &DirectFetchTarget) -> HeaderMap {
     let mut headers = HeaderMap::new();
-    headers.insert(
-        ACCEPT,
-        HeaderValue::from_str(&accept_header(target)).map_err(header_error)?,
-    );
+    headers.insert(ACCEPT, HeaderValue::from_static(accept_header(target)));
     headers.insert(USER_AGENT, client.user_agent());
-    Ok(headers)
+    headers
 }
-fn accept_header(target: &DirectFetchTarget) -> String {
-    if let Some(value) = target.accept_header.clone() {
-        return value;
-    }
-    if matches!(
-        target.response_format,
+const fn accept_header(target: &DirectFetchTarget) -> &'static str {
+    match target.response_format {
+        ResponseFormat::Markdown => "text/markdown",
+        ResponseFormat::Text => "text/plain,*/*",
         ResponseFormat::MediaWikiApi
-            | ResponseFormat::PackageRegistryJson
-            | ResponseFormat::StackOverflowQuestionJson
-    ) {
-        return "application/json".to_owned();
+        | ResponseFormat::PackageRegistryJson
+        | ResponseFormat::StackOverflowQuestionJson => "application/json",
     }
-    "text/plain,*/*".to_owned()
-}
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "map_err passes InvalidHeaderValue by value and the formatter consumes only its Display output."
-)]
-fn header_error(error: reqwest::header::InvalidHeaderValue) -> AppError {
-    AppError::internal(format!("invalid configured HTTP header: {error}"))
 }
 mod probe;
 #[cfg(test)]

@@ -1,16 +1,28 @@
 use crate::{
     Result,
-    config::DirectFetchConfig,
     direct::{
-        mediawiki::extract_mediawiki_content,
-        package::format_package_registry_json,
-        stack_overflow::format_stack_overflow_question_json,
+        sites::{
+            mediawiki::extract_mediawiki_content, package::format_package_registry_json,
+            stack_overflow::format_stack_overflow_question_json,
+        },
         target::{DirectFetchTarget, ResponseFormat},
     },
     error::{AppError, http_service_error},
 };
 use reqwest::header::{CONTENT_TYPE, HeaderMap};
 use sonic_rs::{JsonValueMutTrait as _, JsonValueTrait as _, Value};
+use std::sync::LazyLock;
+static HTML_DOCUMENT: LazyLock<Result<fancy_regex::Regex>> = LazyLock::new(|| {
+    fancy_regex::Regex::new(
+        r"(?is)\A(?:\s|\u{FEFF}|<!--.*?-->)*(?:<!doctype\s+html(?:\s|>)|<html(?:\s|>))",
+    )
+    .map_err(|error| AppError::internal(format!("invalid HTML document signature: {error}")))
+});
+#[derive(Clone, Copy)]
+enum ResponsePurpose {
+    Content,
+    MissingProbe,
+}
 #[expect(
     clippy::missing_inline_in_public_items,
     reason = "Direct content extraction can parse and reserialize response bodies."
@@ -20,21 +32,41 @@ pub fn extract_content(
     status_code: u16,
     headers: &HeaderMap,
     body: &[u8],
-    direct_config: &DirectFetchConfig,
 ) -> Result<String> {
-    if status_code >= 400 {
-        return Err(http_service_error("direct fetch", status_code));
+    extract_response(target, status_code, headers, body, ResponsePurpose::Content)?
+        .ok_or_else(|| AppError::internal("accepted direct content was missing"))
+}
+pub(crate) fn extract_probe_content(
+    target: &DirectFetchTarget,
+    status_code: u16,
+    headers: &HeaderMap,
+    body: &[u8],
+) -> Result<Option<String>> {
+    extract_response(
+        target,
+        status_code,
+        headers,
+        body,
+        ResponsePurpose::MissingProbe,
+    )
+}
+fn extract_response(
+    target: &DirectFetchTarget,
+    status_code: u16,
+    headers: &HeaderMap,
+    body: &[u8],
+    purpose: ResponsePurpose,
+) -> Result<Option<String>> {
+    match (purpose, status_code) {
+        (_, 200) => {}
+        (ResponsePurpose::MissingProbe, 404 | 410) => return Ok(None),
+        _ => return Err(http_service_error("direct fetch", status_code)),
     }
-    if body.len() > direct_config.max_bytes {
-        return Err(AppError::client(format!(
-            "Direct content is larger than the allowed {} bytes.",
-            direct_config.max_bytes
-        )));
-    }
-    ensure_text_content(target, body)?;
-    ensure_required_content_type(target, headers)?;
-    match target.response_format {
-        ResponseFormat::Text => Ok(String::from_utf8_lossy(body).into_owned()),
+    ensure_content_type(target.response_format, headers)?;
+    let content = match target.response_format {
+        ResponseFormat::Markdown | ResponseFormat::Text => {
+            decode_text(target.response_format, body)
+        }
         ResponseFormat::MediaWikiApi => extract_mediawiki_content(body),
         ResponseFormat::PackageRegistryJson => {
             let payload = package_registry_payload(body)?;
@@ -45,15 +77,32 @@ pub fn extract_content(
             )
         }
         ResponseFormat::StackOverflowQuestionJson => format_stack_overflow_question_json(body),
-    }
+    }?;
+    Ok(Some(content))
 }
-fn ensure_text_content(target: &DirectFetchTarget, body: &[u8]) -> Result<()> {
-    if !matches!(target.response_format, ResponseFormat::Text)
-        || content_inspector::inspect(body).is_text()
-    {
-        return Ok(());
+fn decode_text(format: ResponseFormat, body: &[u8]) -> Result<String> {
+    if !content_inspector::inspect(body).is_text() {
+        return Err(AppError::client("Direct fetch returned binary content."));
     }
-    Err(AppError::client("Direct fetch returned binary content."))
+    let text = core::str::from_utf8(body).map_err(|error| {
+        AppError::client(format!("Direct fetch returned invalid UTF-8: {error}"))
+    })?;
+    if matches!(format, ResponseFormat::Markdown)
+        && HTML_DOCUMENT
+            .as_ref()
+            .map_err(Clone::clone)?
+            .is_match(text)
+            .map_err(|error| {
+                AppError::internal(format!(
+                    "failed to inspect direct Markdown content: {error}"
+                ))
+            })?
+    {
+        return Err(AppError::client(
+            "Direct fetch returned an HTML document instead of Markdown.",
+        ));
+    }
+    Ok(text.to_owned())
 }
 fn package_registry_payload(body: &[u8]) -> Result<Value> {
     let mut payload: Value = sonic_rs::from_slice(body)
@@ -77,9 +126,13 @@ fn normalize_crlf(value: &mut Value) {
         }
     }
 }
-fn ensure_required_content_type(target: &DirectFetchTarget, headers: &HeaderMap) -> Result<()> {
-    let Some(expected) = target.required_content_type.as_deref() else {
-        return Ok(());
+fn ensure_content_type(format: ResponseFormat, headers: &HeaderMap) -> Result<()> {
+    let expected = match format {
+        ResponseFormat::Markdown => "text/markdown",
+        ResponseFormat::Text => "non-HTML textual content",
+        ResponseFormat::MediaWikiApi
+        | ResponseFormat::PackageRegistryJson
+        | ResponseFormat::StackOverflowQuestionJson => "application/json",
     };
     let Some(content_type) = headers
         .get(CONTENT_TYPE)
@@ -94,15 +147,27 @@ fn ensure_required_content_type(target: &DirectFetchTarget, headers: &HeaderMap)
             "Direct fetch returned invalid Content-Type {content_type}: {error}."
         ))
     })?;
-    let expected_mime = expected.parse::<mime::Mime>().map_err(|error| {
-        AppError::internal(format!(
-            "configured direct fetch Content-Type {expected} is invalid: {error}"
-        ))
-    })?;
-    if actual.essence_str() == expected_mime.essence_str() {
+    let accepted = match format {
+        ResponseFormat::Markdown => actual.essence_str() == "text/markdown",
+        ResponseFormat::Text => {
+            actual.essence_str() != "application/xhtml+xml"
+                && ((actual.type_() == mime::TEXT && actual.subtype() != mime::HTML)
+                    || is_json(&actual)
+                    || actual.essence_str() == "application/xml"
+                    || actual.suffix() == Some(mime::XML))
+        }
+        ResponseFormat::MediaWikiApi
+        | ResponseFormat::PackageRegistryJson
+        | ResponseFormat::StackOverflowQuestionJson => is_json(&actual),
+    };
+    if accepted {
         return Ok(());
     }
     Err(AppError::client(format!(
         "Direct fetch returned Content-Type {content_type}; expected {expected}."
     )))
+}
+fn is_json(content_type: &mime::Mime) -> bool {
+    content_type.type_() == mime::APPLICATION
+        && (content_type.subtype() == mime::JSON || content_type.suffix() == Some(mime::JSON))
 }

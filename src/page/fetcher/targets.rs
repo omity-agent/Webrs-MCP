@@ -13,7 +13,7 @@ pub(super) fn direct_fetch_targets(
     markdown_targets
 }
 fn markdown_accept_target(url: &str) -> DirectFetchTarget {
-    DirectFetchTarget::markdown_accept(url)
+    DirectFetchTarget::markdown(url, url)
 }
 fn markdown_direct_fetch_targets(url: &str) -> Vec<DirectFetchTarget> {
     let probe_url = replace_path_suffix(url, &random_missing_suffix());
@@ -34,8 +34,7 @@ fn markdown_direct_fetch_target(
     request_url: String,
     probe_url: &str,
 ) -> DirectFetchTarget {
-    let mut target = DirectFetchTarget::text(original_url, request_url);
-    target.required_content_type = Some("text/markdown".to_owned());
+    let mut target = DirectFetchTarget::markdown(original_url, request_url);
     target.similarity_probe_url = Some(probe_url.to_owned());
     target
 }

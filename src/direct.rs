@@ -2,19 +2,17 @@
     clippy::pub_use,
     reason = "The facade exposes domain types without duplicating their definitions."
 )]
-pub mod code_hosts;
 pub mod content;
-pub mod fetch;
-pub mod mediawiki;
-pub mod package;
-pub mod stack_overflow;
-pub mod target;
 #[cfg(test)]
-mod tests;
+mod decoding_tests;
+pub mod fetch;
+pub mod sites;
+#[cfg(test)]
+mod source_tests;
+pub mod target;
 use crate::config::DirectFetchConfig;
-pub(crate) use fetch::{
-    SharedProbeFetch, fetch_direct_text, fetch_direct_text_with_probe, shared_probe_fetch,
-};
+pub(crate) use fetch::{SharedProbeFetch, fetch_direct_text, shared_probe_fetch};
+use sites::{code_hosts, learn, mediawiki, package, stack_overflow};
 pub use target::{DirectFetchTarget, ResponseFormat};
 #[inline]
 #[must_use]
@@ -24,11 +22,8 @@ pub fn resolve_direct_fetch_target(
 ) -> Option<DirectFetchTarget> {
     let parsed = url::Url::parse(url).ok()?;
     let host = parsed.host_str()?.to_ascii_lowercase();
-    if contains(&config.microsoft_learn_hosts, &host) {
-        return Some(DirectFetchTarget::text(
-            url,
-            microsoft_learn_markdown_url(&parsed),
-        ));
+    if let Some(markdown_url) = learn::markdown_url(&parsed, config) {
+        return Some(DirectFetchTarget::markdown(url, markdown_url));
     }
     if let Some(raw_url) = code_hosts::resolve_code_host_raw_url(&parsed, &host, config) {
         return Some(DirectFetchTarget::text(url, raw_url));
@@ -46,20 +41,4 @@ pub fn resolve_direct_fetch_target(
     }
     mediawiki::resolve_mediawiki_api_url(&parsed, config)
         .map(|request_url| DirectFetchTarget::mediawiki(url, request_url))
-}
-fn microsoft_learn_markdown_url(parsed: &url::Url) -> String {
-    let mut pairs: Vec<(String, String)> = parsed
-        .query_pairs()
-        .filter(|pair| !pair.0.as_ref().eq_ignore_ascii_case("accept"))
-        .map(|(key, value)| (key.into_owned(), value.into_owned()))
-        .collect();
-    pairs.push(("accept".to_owned(), "text/markdown".to_owned()));
-    let mut next = parsed.clone();
-    next.query_pairs_mut().clear().extend_pairs(pairs);
-    next.to_string()
-}
-fn contains(values: &[String], value: &str) -> bool {
-    values
-        .iter()
-        .any(|configured| configured.eq_ignore_ascii_case(value))
 }

@@ -84,6 +84,7 @@ pub struct DirectFetchConfig {
     pub gitlab_hosts: Vec<String>,
     pub bitbucket_hosts: Vec<String>,
     pub microsoft_learn_hosts: Vec<String>,
+    pub microsoft_learn_excluded_sections: Vec<String>,
     pub stack_overflow_hosts: Vec<String>,
     pub stack_overflow_api_url_template: String,
     pub npm_hosts: Vec<String>,
@@ -174,6 +175,7 @@ impl AppConfig {
             &self.direct_fetch.wikimedia_api_path,
             "direct_fetch.wikimedia_api_path",
         )?;
+        validation::learn_sections(&self.direct_fetch.microsoft_learn_excluded_sections)?;
         Ok(())
     }
 }
