@@ -4,6 +4,7 @@ use crate::{
     config::SearchConfig,
     error::AppError,
     models::{SearchQueryRequest, SearchResult},
+    warnings::Warnings,
 };
 use chrono::SecondsFormat;
 use serde::{Deserialize, Serialize};
@@ -87,7 +88,7 @@ pub(super) fn payload<'request>(
         safesearch: &config.octen.safesearch,
     })
 }
-pub(super) fn decode(body: &[u8]) -> Result<(Vec<SearchResult>, Vec<String>)> {
+pub(super) fn decode(body: &[u8]) -> Result<(Vec<SearchResult>, Warnings)> {
     let response: Response = sonic_rs::from_slice(body)
         .map_err(|error| AppError::client(format!("Octen returned malformed JSON: {error}")))?;
     if response.code != 0 {
@@ -101,13 +102,14 @@ pub(super) fn decode(body: &[u8]) -> Result<(Vec<SearchResult>, Vec<String>)> {
     let data = response
         .data
         .ok_or_else(|| AppError::client("Octen success response is missing data."))?;
-    let warnings = response
+    let mut warnings = Warnings::new();
+    if let Some(warning) = response
         .meta
         .and_then(|meta| meta.warning)
         .filter(|warning| !warning.trim().is_empty())
-        .map(|warning| format!("Octen: {warning}"))
-        .into_iter()
-        .collect();
+    {
+        warnings.push(format!("Octen: {warning}"));
+    }
     let results = data
         .results
         .into_iter()

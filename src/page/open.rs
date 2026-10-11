@@ -3,6 +3,7 @@ use crate::{
     error::AppError,
     models::OpenPage,
     page::{PageContent, TokenChunker},
+    warnings::Warnings,
 };
 #[expect(
     clippy::missing_inline_in_public_items,
@@ -13,7 +14,7 @@ pub fn open_page_chunk(
     chunk_index: usize,
     request_index: usize,
     chunker: &TokenChunker,
-    warnings: &mut Vec<String>,
+    warnings: &mut Warnings,
 ) -> Result<OpenPage> {
     let chunks = chunker.split(&page.markdown)?;
     let selected = if chunk_index >= chunks.len() {

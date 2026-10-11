@@ -1,4 +1,4 @@
-use crate::{Result, error::AppError};
+use crate::{Result, config::validation, error::AppError};
 use alloc::sync::Arc;
 use tokio::sync::Semaphore;
 #[derive(Clone)]
@@ -8,13 +8,10 @@ pub struct BlockingPool {
 impl BlockingPool {
     #[inline]
     pub fn new(max_concurrent_tasks: usize) -> Result<Self> {
-        if max_concurrent_tasks == 0 || max_concurrent_tasks > Semaphore::MAX_PERMITS {
-            return Err(AppError::config(
-                "chunking.max_concurrent_tasks is outside the supported range",
-            ));
-        }
+        let permits =
+            validation::concurrency_limit(max_concurrent_tasks, "chunking.max_concurrent_tasks")?;
         Ok(Self {
-            permits: Arc::new(Semaphore::new(max_concurrent_tasks)),
+            permits: Arc::new(Semaphore::new(permits.get())),
         })
     }
     #[expect(

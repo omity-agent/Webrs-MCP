@@ -10,6 +10,7 @@ pub mod models;
 pub mod net;
 pub mod page;
 pub mod search;
+pub mod warnings;
 #[global_allocator]
 static ALLOC: snmalloc_rs::SnMalloc = snmalloc_rs::SnMalloc;
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

@@ -8,6 +8,7 @@ use crate::{
     error::AppError,
     models::{FindPage, FindRequest, FindResponse, OpenRequest, OpenResponse, OpenResult},
     page::{PageContent, TokenChunker, find_in_page, open_page_chunk},
+    warnings::Warnings,
 };
 use fancy_regex::Regex;
 use futures::{StreamExt as _, stream};
@@ -18,7 +19,7 @@ pub(crate) async fn open_pages(
     pages: Vec<Result<PageContent>>,
     chunker: TokenChunker,
     pool: &BlockingPool,
-    mut warnings: Vec<String>,
+    mut warnings: Warnings,
 ) -> OpenResponse {
     let mut fetched_pages = pages.into_iter();
     let max_concurrent_tasks = chunker.max_concurrent_tasks();
@@ -47,7 +48,7 @@ pub(crate) async fn open_pages(
                             url: result_url,
                             error: error.client_message(),
                         },
-                        Vec::new(),
+                        Warnings::new(),
                     )
                 })
             }
@@ -60,11 +61,11 @@ pub(crate) async fn open_pages(
     let mut results = Vec::with_capacity(joined.len());
     for (result, page_warnings) in joined {
         results.push(result);
-        warnings.extend(page_warnings);
+        warnings.append(page_warnings);
     }
     OpenResponse {
         results,
-        warning: (!warnings.is_empty()).then_some(warnings),
+        warning: warnings.into_option(),
     }
 }
 fn process_open_result(
@@ -73,8 +74,8 @@ fn process_open_result(
     chunk_index: usize,
     request_index: usize,
     chunker: &TokenChunker,
-) -> (OpenResult, Vec<String>) {
-    let mut warnings = Vec::new();
+) -> (OpenResult, Warnings) {
+    let mut warnings = Warnings::new();
     let opened = fetched.and_then(|page| {
         open_page_chunk(&page, chunk_index, request_index, chunker, &mut warnings)
     });
@@ -95,7 +96,7 @@ pub(crate) async fn find_pages(
     pool: &BlockingPool,
     config: FindConfig,
     chunk_tokens: usize,
-    mut warnings: Vec<String>,
+    mut warnings: Warnings,
 ) -> Result<FindResponse> {
     let max_concurrent_tasks = chunker.max_concurrent_tasks();
     let tasks = requests
@@ -114,7 +115,7 @@ pub(crate) async fn find_pages(
                 let requested_snippet_tokens = request.snippet_tokens;
                 async move {
                     pool.run(move || {
-                        let mut page_warnings = Vec::new();
+                        let mut page_warnings = Warnings::new();
                         let snippet_tokens = snippet_tokens_for_request(
                             requested_snippet_tokens,
                             request_index,
@@ -129,7 +130,7 @@ pub(crate) async fn find_pages(
                             &page_chunker,
                             &find_config,
                         )?;
-                        Ok::<(FindPage, Vec<String>), AppError>((found, page_warnings))
+                        Ok::<(FindPage, Warnings), AppError>((found, page_warnings))
                     })
                     .await
                 }
@@ -143,11 +144,11 @@ pub(crate) async fn find_pages(
     for task in joined {
         let (page, page_warnings) = task?;
         found.push(page);
-        warnings.extend(page_warnings);
+        warnings.append(page_warnings);
     }
     Ok(FindResponse {
         pages: found,
-        warning: (!warnings.is_empty()).then_some(warnings),
+        warning: warnings.into_option(),
     })
 }
 pub(crate) async fn compile_patterns(
@@ -175,7 +176,7 @@ pub(crate) async fn compile_patterns(
 fn snippet_tokens_for_request(
     requested: Option<usize>,
     request_index: usize,
-    warnings: &mut Vec<String>,
+    warnings: &mut Warnings,
     chunk_tokens: usize,
     default_snippet_tokens: usize,
 ) -> usize {

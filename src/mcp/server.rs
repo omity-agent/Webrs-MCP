@@ -2,10 +2,7 @@ use crate::{
     VERSION,
     config::AppConfig,
     error::AppError,
-    mcp::{
-        schemas,
-        tools::{ToolOutput, ToolService},
-    },
+    mcp::tools::{ToolOutput, ToolService},
 };
 use alloc::borrow::Cow;
 use axum::http::HeaderMap;
@@ -47,18 +44,16 @@ impl ServerHandler for ToolService {
         _request: Option<PaginatedRequestParams>,
         context: RequestContext<RoleServer>,
     ) -> impl Future<Output = Result<ListToolsResult, McpError>> + MaybeSendFuture + '_ {
-        let result = schemas::tools(&self.config().tools, self.mode())
-            .map(|tools| {
-                list_tools_result(self.config(), tools, context.protocol_version().as_ref())
-            })
-            .map_err(to_mcp_error);
-        core::future::ready(result)
+        let tools = self.tool_definitions();
+        core::future::ready(Ok(list_tools_result(
+            self.config(),
+            tools,
+            context.protocol_version().as_ref(),
+        )))
     }
     #[inline]
     fn get_tool(&self, name: &str) -> Option<Tool> {
-        schemas::tool_by_name(&self.config().tools, self.mode(), name)
-            .ok()
-            .flatten()
+        self.tool(name)
     }
     #[inline]
     #[expect(
@@ -72,10 +67,7 @@ impl ServerHandler for ToolService {
     ) -> impl Future<Output = Result<CallToolResponse, McpError>> + MaybeSendFuture + '_ {
         async move {
             let tool_name = request.name.as_ref();
-            if schemas::tool_by_name(&self.config().tools, self.mode(), tool_name)
-                .map_err(to_mcp_error)?
-                .is_none()
-            {
+            if !self.has_tool(tool_name) {
                 return Err(McpError::invalid_params(
                     format!("Unknown tool: {tool_name}"),
                     None,

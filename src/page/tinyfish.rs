@@ -27,9 +27,9 @@ impl TinyFishFetchClient {
         reason = "TinyFish reads perform async HTTP I/O and are not inline candidates."
     )]
     pub async fn read_markdown(&self, url: &str, api_key: &str) -> Result<String> {
-        let urls = vec![url.to_owned()];
-        self.read_markdown_many(&urls, api_key)
-            .await?
+        let urls = [url.to_owned()];
+        self.read_batch(&urls, api_key)
+            .await
             .into_iter()
             .next()
             .ok_or_else(|| AppError::internal("TinyFish batch response was empty"))?

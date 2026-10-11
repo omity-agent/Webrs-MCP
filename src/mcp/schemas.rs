@@ -34,12 +34,6 @@ pub fn tools(names: &ToolNames, mode: WorkMode) -> Result<Vec<Tool>> {
         )?,
     ])
 }
-#[inline]
-pub fn tool_by_name(names: &ToolNames, mode: WorkMode, name: &str) -> Result<Option<Tool>> {
-    Ok(tools(names, mode)?
-        .into_iter()
-        .find(|tool| tool.name == name))
-}
 fn tool<I, O>(name: &str, description: &'static str) -> Result<Tool>
 where
     I: JsonSchema,

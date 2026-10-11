@@ -5,13 +5,13 @@ use crate::{
         aliases::{FIND_FIELDS, OPEN_FIELDS, SEARCH_FIELDS},
         normalizer::normalize_requests,
         request::RequestMap,
-        support::push_unique,
     },
     error::AppError,
     models::{
         FindArguments, FindRequest, OpenArguments, OpenRequest, SearchQueryArguments,
         SearchQueryRequest,
     },
+    warnings::Warnings,
 };
 use sonic_rs::Value;
 use validation::{
@@ -67,24 +67,23 @@ pub fn find_arguments(raw: Option<Value>) -> Result<Normalized<FindArguments>> {
     }
     Ok(Normalized::new(FindArguments { requests }, warnings))
 }
-fn normalize_open_chunks(maps: &mut [RequestMap], warnings: &mut Vec<String>) {
+fn normalize_open_chunks(maps: &mut [RequestMap], warnings: &mut Warnings) {
     for (index, map) in maps.iter_mut().enumerate() {
         let path = format!("requests[{index}].chunk");
         match map.get("chunk") {
             None => {
                 map.insert("chunk".to_owned(), Value::from(0_u64));
-                push_unique(warnings, format!("\"{path}\" is required; using 0"));
+                warnings.push_unique(format!("\"{path}\" is required; using 0"));
             }
             Some(value) if is_empty(value) => {
                 map.insert("chunk".to_owned(), Value::from(0_u64));
-                push_unique(warnings, format!("\"{path}\" is empty; using 0"));
+                warnings.push_unique(format!("\"{path}\" is empty; using 0"));
             }
             Some(value) if integer_value(value).is_some_and(|number| number < 0) => {
                 map.insert("chunk".to_owned(), Value::from(0_u64));
-                push_unique(
-                    warnings,
-                    format!("\"{path}\" must be greater than or equal to 0; using 0"),
-                );
+                warnings.push_unique(format!(
+                    "\"{path}\" must be greater than or equal to 0; using 0"
+                ));
             }
             Some(_) => {}
         }

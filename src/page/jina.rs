@@ -1,7 +1,7 @@
 use crate::{
     Result,
     config::{AppConfig, JinaViewportConfig},
-    error::{AppError, http_service_error},
+    error::AppError,
     net::SecureHttpClient,
 };
 use alloc::sync::Arc;
@@ -37,16 +37,14 @@ impl JinaReaderClient {
         };
         let response = self
             .http
-            .post_json(
+            .post_json_checked(
                 &self.config.jina.endpoint,
                 headers,
                 &payload,
                 self.config.http.timeout_seconds,
+                "Jina",
             )
             .await?;
-        if response.status.as_u16() >= 400 {
-            return Err(http_service_error("Jina", response.status.as_u16()));
-        }
         extract_content(&response.headers, &response.body)
     }
     fn headers(&self, api_key: &str) -> Result<HeaderMap> {

@@ -8,21 +8,19 @@ pub mod typed;
 use crate::{
     Result,
     models::{FindArguments, OpenArguments, SearchQueryArguments},
+    warnings::Warnings,
 };
 use sonic_rs::Value;
 #[derive(Clone, Debug)]
 pub struct Normalized<T> {
     pub value: T,
-    pub warning: Option<Vec<String>>,
+    pub warnings: Warnings,
 }
 impl<T> Normalized<T> {
     #[inline]
     #[must_use]
-    pub fn new(value: T, warnings: Vec<String>) -> Self {
-        Self {
-            value,
-            warning: (!warnings.is_empty()).then_some(warnings),
-        }
+    pub const fn new(value: T, warnings: Warnings) -> Self {
+        Self { value, warnings }
     }
 }
 #[inline]

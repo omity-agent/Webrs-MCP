@@ -122,8 +122,8 @@ impl AppConfig {
         self.tools.validate()?;
         self.search.validate()?;
         validation::positive(&self.chunking.chunk_tokens, "chunking.chunk_tokens")?;
-        validation::positive(
-            &self.chunking.max_concurrent_tasks,
+        validation::concurrency_limit(
+            self.chunking.max_concurrent_tasks,
             "chunking.max_concurrent_tasks",
         )?;
         validation::positive(
@@ -145,8 +145,8 @@ impl AppConfig {
             self.http.direct_fetch_timeout_seconds,
             "http.direct_fetch_timeout_seconds",
         )?;
-        validation::positive(
-            &self.http.max_concurrent_requests,
+        validation::concurrency_limit(
+            self.http.max_concurrent_requests,
             "http.max_concurrent_requests",
         )?;
         validation::positive(&self.http.max_response_bytes, "http.max_response_bytes")?;

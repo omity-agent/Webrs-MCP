@@ -2,8 +2,9 @@ use crate::arguments::{
     aliases::{self, FieldSpec},
     field::normalize_field,
     singleton::single_valid_string,
-    support::{parse_json_container, push_unique},
+    support::parse_json_container,
 };
+use crate::warnings::Warnings;
 use alloc::collections::BTreeMap;
 use sonic_rs::{JsonContainerTrait as _, Value};
 pub type RequestMap = BTreeMap<String, Value>;
@@ -27,7 +28,7 @@ impl RequestNormalizer {
     pub(crate) fn normalize_value(
         self,
         value: Value,
-        warnings: &mut Vec<String>,
+        warnings: &mut Warnings,
         path: &str,
     ) -> RequestMap {
         let parsed = parse_json_container(value);
@@ -42,7 +43,7 @@ impl RequestNormalizer {
         self,
         value: &Value,
         object: &sonic_rs::Object,
-        warnings: &mut Vec<String>,
+        warnings: &mut Warnings,
         path: &str,
     ) -> RequestMap {
         if !self.has_named_field(object)
@@ -59,7 +60,7 @@ impl RequestNormalizer {
     pub(crate) fn singleton_request(
         self,
         value: &Value,
-        warnings: &mut Vec<String>,
+        warnings: &mut Warnings,
         path: &str,
     ) -> Option<RequestMap> {
         let field = self.primary_field?;
@@ -81,14 +82,11 @@ impl RequestNormalizer {
         normalized: &mut RequestMap,
         raw_key: &str,
         raw_item: &Value,
-        warnings: &mut Vec<String>,
+        warnings: &mut Warnings,
         path: &str,
     ) {
         let Some(canonical) = aliases::canonical_field(self.fields, raw_key) else {
-            push_unique(
-                warnings,
-                format!("ignored unrecognized field \"{path}.{raw_key}\""),
-            );
+            warnings.push_unique(format!("ignored unrecognized field \"{path}.{raw_key}\""));
             return;
         };
         warn_alias(canonical, raw_key, warnings);
@@ -109,19 +107,15 @@ impl RequestNormalizer {
             .any(|(key, _value)| aliases::canonical_field(self.fields, key).is_some())
     }
 }
-fn warn_alias(canonical: &str, raw_key: &str, warnings: &mut Vec<String>) {
+fn warn_alias(canonical: &str, raw_key: &str, warnings: &mut Warnings) {
     if canonical != raw_key {
-        push_unique(
-            warnings,
-            format!("use \"{canonical}\" instead of \"{raw_key}\""),
-        );
+        warnings.push_unique(format!("use \"{canonical}\" instead of \"{raw_key}\""));
     }
 }
-fn warn_duplicate(normalized: &RequestMap, canonical: &str, warnings: &mut Vec<String>) {
+fn warn_duplicate(normalized: &RequestMap, canonical: &str, warnings: &mut Warnings) {
     if normalized.contains_key(canonical) {
-        push_unique(
-            warnings,
-            format!("multiple aliases for \"{canonical}\" were provided; the last value was used"),
-        );
+        warnings.push_unique(format!(
+            "multiple aliases for \"{canonical}\" were provided; the last value was used"
+        ));
     }
 }

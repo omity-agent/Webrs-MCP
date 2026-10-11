@@ -35,5 +35,5 @@ pub(super) fn duration(seconds: f64) -> Result<Duration> {
     Ok(parsed)
 }
 pub(super) fn timeout_error() -> AppError {
-    AppError::Upstream("upstream request timed out. Retry later.".to_owned())
+    AppError::upstream("upstream request timed out. Retry later.")
 }

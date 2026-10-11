@@ -142,6 +142,7 @@ nanoid = "*"
 num-traits = "*"
 path-slash = "*"
 percent-encoding = "*"
+rapidfuzz = "*"
 reqwest = { git = "https://github.com/seanmonstar/reqwest", default-features = false, features = [
     "deflate",
     "gzip",
@@ -164,7 +165,6 @@ snmalloc-rs = { git = "https://github.com/microsoft/snmalloc", features = [
     "lto",
 ] }
 sonic-rs = { git = "https://github.com/cloudwego/sonic-rs", public = true }
-strsim = "*"
 thiserror = "*"
 tiktoken = "*"
 tokio = { version = "*", features = [

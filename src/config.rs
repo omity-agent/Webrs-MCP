@@ -2,7 +2,7 @@ mod naming;
 mod protocol;
 mod providers;
 pub mod types;
-mod validation;
+pub(crate) mod validation;
 use crate::Result;
 use std::path::Path;
 pub type AppConfig = types::AppConfig;

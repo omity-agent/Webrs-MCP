@@ -2,9 +2,10 @@ use super::{SearchCredentials, exa, octen};
 use crate::{
     Result,
     config::{AppConfig, SearchConfig},
-    error::{AppError, http_service_error},
+    error::AppError,
     models::{SearchQueryRequest, SearchResult},
     net::SecureHttpClient,
+    warnings::Warnings,
 };
 use bytes::Bytes;
 use futures::future::try_join_all;
@@ -18,7 +19,7 @@ pub struct SearchClient {
 }
 pub struct SearchBatch {
     pub groups: Vec<Vec<SearchResult>>,
-    pub warnings: Vec<String>,
+    pub warnings: Warnings,
 }
 impl SearchClient {
     #[inline]
@@ -43,7 +44,7 @@ impl SearchClient {
         let responses = try_join_all(pending).await?;
         let mut batch = SearchBatch {
             groups: Vec::with_capacity(responses.len()),
-            warnings: Vec::new(),
+            warnings: Warnings::new(),
         };
         for (index, (results, warnings)) in responses.into_iter().enumerate() {
             batch.groups.push(results);
@@ -61,14 +62,14 @@ impl SearchClient {
         credentials: &SearchCredentials,
         headers: HeaderMap,
         include_highlights: bool,
-    ) -> Result<(Vec<SearchResult>, Vec<String>)> {
+    ) -> Result<(Vec<SearchResult>, Warnings)> {
         match *credentials {
             SearchCredentials::Exa(_) => {
                 let payload = exa::payload(&self.config, request, include_highlights)?;
                 let body = self
                     .send(&self.config.exa.endpoint, headers, &payload, "Exa")
                     .await?;
-                Ok((exa::decode(&body)?, Vec::new()))
+                Ok((exa::decode(&body)?, Warnings::new()))
             }
             SearchCredentials::Octen(_) => {
                 let payload = octen::payload(&self.config, request, include_highlights)?;
@@ -97,11 +98,8 @@ impl SearchClient {
     {
         let response = self
             .http
-            .post_json(endpoint, headers, payload, self.timeout_seconds)
+            .post_json_checked(endpoint, headers, payload, self.timeout_seconds, provider)
             .await?;
-        if !response.status.is_success() {
-            return Err(http_service_error(provider, response.status.as_u16()));
-        }
         Ok(response.body)
     }
 }

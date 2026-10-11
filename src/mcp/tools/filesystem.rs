@@ -8,6 +8,7 @@ use crate::{
     error::AppError,
     models::{FilesystemResponse, FilesystemSearchArguments},
     page::{PageContent, reader::ReaderCredentials},
+    warnings::Warnings,
 };
 use axum::http::HeaderMap;
 use futures::future::join_all;
@@ -33,7 +34,7 @@ impl ToolService {
             ToolKind::Open => self.filesystem_open(arguments, headers).await,
             ToolKind::Find => Err(AppError::client(format!(
                 "{} is unavailable in filesystem mode",
-                self.config.tools.find
+                self.config().tools.find
             ))),
         };
         ToolOutput::Filesystem(result.unwrap_or_else(|error| failure_response(&error)))
@@ -45,7 +46,7 @@ impl ToolService {
     ) -> Result<FilesystemResponse> {
         let arguments = arguments::search(raw)?;
         let invocation = Invocation::create(&arguments.output_path).await?;
-        let mut warnings = Vec::new();
+        let mut warnings = Warnings::new();
         let result = self
             .search_into_invocation(arguments, headers, &invocation, &mut warnings)
             .await;
@@ -58,7 +59,7 @@ impl ToolService {
         arguments: FilesystemSearchArguments,
         headers: &HeaderMap,
         invocation: &Invocation,
-        warnings: &mut Vec<String>,
+        warnings: &mut Warnings,
     ) -> Result<()> {
         let request_directories = (0..arguments.requests.len())
             .map(|index| PathBuf::from(index.to_string()))
@@ -66,14 +67,15 @@ impl ToolService {
         invocation.prepare(request_directories.iter()).await?;
         let search_key = search_credentials(
             headers,
-            &self.config.headers,
+            &self.config().headers,
             self.credentials.search.as_ref(),
         )?;
         let batch = self
+            .runtime
             .search
             .search_many(&arguments.requests, &search_key, false)
             .await?;
-        warnings.extend(batch.warnings);
+        warnings.append(batch.warnings);
         let targets = batch
             .groups
             .into_iter()
@@ -92,7 +94,7 @@ impl ToolService {
             .collect::<Vec<_>>();
         let credentials = reader_credentials(
             headers,
-            &self.config.headers,
+            &self.config().headers,
             self.credentials.reader.clone(),
         )?;
         materialize(self, invocation, targets, credentials.as_ref()).await
@@ -106,7 +108,7 @@ impl ToolService {
         let invocation = Invocation::create(&arguments.output_path).await?;
         let credentials = reader_credentials(
             headers,
-            &self.config.headers,
+            &self.config().headers,
             self.credentials.reader.clone(),
         )?;
         let targets = arguments
@@ -146,6 +148,7 @@ async fn materialize(
         .map(|entry| entry.1.clone())
         .collect::<Vec<_>>();
     let fetched = service
+        .runtime
         .page_fetcher
         .fetch_many_partial(&urls, credentials)
         .await;

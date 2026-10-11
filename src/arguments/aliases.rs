@@ -37,8 +37,11 @@ impl FieldSpec {
     #[inline]
     #[must_use]
     pub fn matches(self, raw: &str) -> bool {
-        let lowered = raw.to_ascii_lowercase();
-        lowered == self.canonical || self.aliases.iter().any(|alias| lowered == *alias)
+        raw.eq_ignore_ascii_case(self.canonical)
+            || self
+                .aliases
+                .iter()
+                .any(|alias| raw.eq_ignore_ascii_case(alias))
     }
     #[inline]
     #[must_use]
@@ -74,8 +77,9 @@ pub fn canonical_category(raw: &str) -> Option<&'static str> {
 #[must_use]
 pub fn looks_like_request<Keys>(fields: &[FieldSpec], keys: Keys) -> bool
 where
-    Keys: Iterator<Item = String>,
+    Keys: Iterator,
+    Keys::Item: AsRef<str>,
 {
     keys.into_iter()
-        .any(|key| canonical_field(fields, &key).is_some())
+        .any(|key| canonical_field(fields, key.as_ref()).is_some())
 }

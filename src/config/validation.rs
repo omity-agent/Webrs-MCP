@@ -1,5 +1,7 @@
 use crate::{Result, error::AppError};
+use core::num::NonZeroUsize;
 use reqwest::header::{HeaderName, HeaderValue};
+use tokio::sync::Semaphore;
 use url::Url;
 pub fn positive<T>(value: &T, path: &str) -> Result<()>
 where
@@ -15,6 +17,13 @@ pub fn positive_float(value: f64, path: &str) -> Result<()> {
         return Ok(());
     }
     Err(AppError::config(format!("{path} must be positive")))
+}
+pub fn concurrency_limit(value: usize, path: &str) -> Result<NonZeroUsize> {
+    NonZeroUsize::new(value)
+        .filter(|limit| limit.get() <= Semaphore::MAX_PERMITS)
+        .ok_or_else(|| {
+            AppError::config(format!("{path} is outside the supported concurrency range"))
+        })
 }
 pub fn threshold(value: f64, path: &str) -> Result<()> {
     if (0.0_f64..=1.0_f64).contains(&value) {

@@ -33,6 +33,14 @@ impl AppError {
     }
     #[inline]
     #[must_use]
+    pub fn upstream<Message>(message: Message) -> Self
+    where
+        Message: Into<String>,
+    {
+        Self::Upstream(message.into())
+    }
+    #[inline]
+    #[must_use]
     pub fn internal<Message>(message: Message) -> Self
     where
         Message: Into<String>,
@@ -68,11 +76,9 @@ impl From<reqwest::Error> for AppError {
             cause = source.source();
         }
         if error.is_timeout() {
-            return Self::Upstream("upstream request timed out. Retry later.".to_owned());
+            return Self::upstream("upstream request timed out. Retry later.");
         }
-        Self::Upstream(
-            "Could not reach upstream service. Check network connectivity and retry.".to_owned(),
-        )
+        Self::upstream("Could not reach upstream service. Check network connectivity and retry.")
     }
 }
 #[inline]

@@ -1,7 +1,7 @@
 use crate::{
     Result,
-    config::HttpConfig,
-    error::AppError,
+    config::{HttpConfig, validation},
+    error::{AppError, http_service_error},
     net::{SsrfGuard, body, transport},
 };
 use alloc::sync::Arc;
@@ -32,13 +32,10 @@ pub struct FetchResponse {
 impl SecureHttpClient {
     #[inline]
     pub fn new(config: &HttpConfig, guard: SsrfGuard) -> Result<Self> {
-        if config.max_concurrent_requests == 0
-            || config.max_concurrent_requests > Semaphore::MAX_PERMITS
-        {
-            return Err(AppError::config(
-                "http.max_concurrent_requests is outside the supported range",
-            ));
-        }
+        let max_concurrent_requests = validation::concurrency_limit(
+            config.max_concurrent_requests,
+            "http.max_concurrent_requests",
+        )?;
         if config.max_response_bytes == 0 {
             return Err(AppError::config("http.max_response_bytes must be positive"));
         }
@@ -49,7 +46,7 @@ impl SecureHttpClient {
             direct,
             api,
             guard,
-            requests: Arc::new(Semaphore::new(config.max_concurrent_requests)),
+            requests: Arc::new(Semaphore::new(max_concurrent_requests.get())),
             max_response_bytes: config.max_response_bytes,
             user_agent,
         })
@@ -111,6 +108,25 @@ impl SecureHttpClient {
             .body(encoded);
         self.execute(request, timeout_seconds, self.max_response_bytes)
             .await
+    }
+    pub(crate) async fn post_json_checked<Payload>(
+        &self,
+        url: &str,
+        headers: HeaderMap,
+        payload: &Payload,
+        timeout_seconds: f64,
+        service: &str,
+    ) -> Result<FetchResponse>
+    where
+        Payload: Serialize + Sync,
+    {
+        let response = self
+            .post_json(url, headers, payload, timeout_seconds)
+            .await?;
+        if response.status.is_success() {
+            return Ok(response);
+        }
+        Err(http_service_error(service, response.status.as_u16()))
     }
     async fn execute(
         &self,

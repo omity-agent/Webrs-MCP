@@ -4,11 +4,10 @@ use crate::{
     cli::WorkMode,
     config::{AppConfig, ToolKind},
     error::AppError,
-    mcp::processing::{BlockingPool, compile_patterns, find_pages, open_pages},
+    mcp::processing::{compile_patterns, find_pages, open_pages},
     models::SearchQueryResponse,
-    net::secure_client_from_config,
-    page::{PageFetcher, TokenChunker, reader::ReaderCredentials},
-    search::{SearchClient, SearchCredentials},
+    page::reader::ReaderCredentials,
+    search::SearchCredentials,
 };
 use alloc::sync::Arc;
 use axum::http::HeaderMap;
@@ -16,8 +15,10 @@ use sonic_rs::Value;
 mod filesystem;
 mod identity;
 mod render;
+mod runtime;
 use identity::{reader_credentials, search_credentials};
 pub(crate) use render::ToolOutput;
+use runtime::ToolRuntime;
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ToolCredentials {
     pub search: Option<SearchCredentials>,
@@ -25,12 +26,8 @@ pub struct ToolCredentials {
 }
 #[derive(Clone)]
 pub struct ToolService {
-    config: Arc<AppConfig>,
+    runtime: Arc<ToolRuntime>,
     credentials: ToolCredentials,
-    chunker: TokenChunker,
-    processing: BlockingPool,
-    page_fetcher: PageFetcher,
-    search: SearchClient,
     mode: WorkMode,
 }
 impl ToolService {
@@ -44,26 +41,27 @@ impl ToolService {
         credentials: ToolCredentials,
         mode: WorkMode,
     ) -> Result<Self> {
-        config.validate()?;
-        let shared_config = Arc::new(config);
-        let http = secure_client_from_config(&shared_config)?;
         Ok(Self {
+            runtime: Arc::new(ToolRuntime::new(config, mode)?),
             credentials,
-            chunker: TokenChunker::new(&shared_config.chunking)?,
-            processing: BlockingPool::new(shared_config.chunking.max_concurrent_tasks)?,
-            page_fetcher: PageFetcher::new(Arc::clone(&shared_config), http.clone()),
-            search: SearchClient::new(&shared_config, http),
-            config: shared_config,
             mode,
         })
     }
     #[must_use]
     pub(crate) fn config(&self) -> &AppConfig {
-        &self.config
+        &self.runtime.config
     }
     #[must_use]
-    pub(crate) const fn mode(&self) -> WorkMode {
-        self.mode
+    pub(crate) fn tool(&self, name: &str) -> Option<rmcp::model::Tool> {
+        self.runtime.tool(name)
+    }
+    #[must_use]
+    pub(crate) fn has_tool(&self, name: &str) -> bool {
+        self.runtime.tools.iter().any(|tool| tool.name == name)
+    }
+    #[must_use]
+    pub(crate) fn tool_definitions(&self) -> Vec<rmcp::model::Tool> {
+        self.runtime.tool_definitions()
     }
     pub(crate) async fn call(
         &self,
@@ -72,6 +70,7 @@ impl ToolService {
         headers: &HeaderMap,
     ) -> Result<ToolOutput> {
         let kind = self
+            .runtime
             .config
             .tools
             .resolve(name)
@@ -93,26 +92,27 @@ impl ToolService {
         let normalized = search_arguments(arguments)?;
         let credentials = search_credentials(
             headers,
-            &self.config.headers,
+            &self.runtime.config.headers,
             self.credentials.search.as_ref(),
         )?;
         let batch = self
+            .runtime
             .search
             .search_many(&normalized.value.requests, &credentials, true)
             .await?;
-        let mut warnings = normalized.warning.unwrap_or_default();
-        warnings.extend(batch.warnings);
+        let mut warnings = normalized.warnings;
+        warnings.append(batch.warnings);
         Ok(ToolOutput::Search(SearchQueryResponse {
             results: batch.groups.into_iter().flatten().collect(),
-            warning: (!warnings.is_empty()).then_some(warnings),
+            warning: warnings.into_option(),
         }))
     }
     async fn open(&self, arguments: Option<Value>, headers: &HeaderMap) -> Result<ToolOutput> {
         let normalized = open_arguments(arguments)?;
-        let warnings = normalized.warning.unwrap_or_default();
+        let warnings = normalized.warnings;
         let credentials = reader_credentials(
             headers,
-            &self.config.headers,
+            &self.runtime.config.headers,
             self.credentials.reader.clone(),
         )?;
         let urls = normalized
@@ -122,14 +122,15 @@ impl ToolService {
             .map(|request| request.url.clone())
             .collect::<Vec<_>>();
         let pages = self
+            .runtime
             .page_fetcher
             .fetch_many_partial(&urls, credentials.as_ref())
             .await;
         let response = open_pages(
             &normalized.value.requests,
             pages,
-            self.chunker.clone(),
-            &self.processing,
+            self.runtime.chunker.clone(),
+            &self.runtime.processing,
             warnings,
         )
         .await;
@@ -139,10 +140,11 @@ impl ToolService {
         let normalized = find_arguments(arguments)?;
         let credentials = reader_credentials(
             headers,
-            &self.config.headers,
+            &self.runtime.config.headers,
             self.credentials.reader.clone(),
         )?;
-        let patterns = compile_patterns(&normalized.value.requests, &self.processing).await?;
+        let patterns =
+            compile_patterns(&normalized.value.requests, &self.runtime.processing).await?;
         let urls = normalized
             .value
             .requests
@@ -150,18 +152,19 @@ impl ToolService {
             .map(|request| request.url.clone())
             .collect::<Vec<_>>();
         let pages = self
+            .runtime
             .page_fetcher
             .fetch_many(&urls, credentials.as_ref())
             .await?;
-        let warnings = normalized.warning.unwrap_or_default();
+        let warnings = normalized.warnings;
         let response = find_pages(
             &normalized.value.requests,
             pages,
             patterns,
-            self.chunker.clone(),
-            &self.processing,
-            self.config.find.clone(),
-            self.config.chunking.chunk_tokens,
+            self.runtime.chunker.clone(),
+            &self.runtime.processing,
+            self.runtime.config.find.clone(),
+            self.runtime.config.chunking.chunk_tokens,
             warnings,
         )
         .await?;
