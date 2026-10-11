@@ -7,8 +7,6 @@ use crate::{
         SearchQueryResponse, SearchResult,
     },
 };
-#[cfg(test)]
-mod tests;
 mod writer;
 use writer::PseudoXml;
 #[derive(serde :: Serialize)]

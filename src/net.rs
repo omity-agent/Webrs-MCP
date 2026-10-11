@@ -2,8 +2,6 @@ pub(crate) mod body;
 pub mod client;
 pub(crate) mod resolver;
 pub mod ssrf;
-#[cfg(test)]
-mod tests;
 mod transport;
 pub type FetchResponse = client::FetchResponse;
 pub type SecureHttpClient = client::SecureHttpClient;

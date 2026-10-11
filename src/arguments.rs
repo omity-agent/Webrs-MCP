@@ -4,8 +4,6 @@ pub mod normalizer;
 pub(crate) mod request;
 pub(crate) mod singleton;
 pub(crate) mod support;
-#[cfg(test)]
-mod tests;
 pub mod typed;
 use crate::{
     Result,

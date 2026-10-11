@@ -2,8 +2,6 @@ use super::{PageContent, PageFetcher, PageSource};
 use crate::{Result, error::AppError, page::reader::ReaderCredentials};
 use futures::future::join_all;
 use std::collections::HashMap;
-#[cfg(test)]
-mod tests;
 impl PageFetcher {
     #[expect(
         clippy::missing_inline_in_public_items,

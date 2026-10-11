@@ -16,8 +16,6 @@ use std::path::PathBuf;
 use storage::Invocation;
 mod arguments;
 mod storage;
-#[cfg(test)]
-mod tests;
 struct PageTarget {
     url: String,
     directory: PathBuf,

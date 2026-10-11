@@ -90,5 +90,3 @@ const fn accept_header(target: &DirectFetchTarget) -> &'static str {
     }
 }
 mod probe;
-#[cfg(test)]
-mod tests;

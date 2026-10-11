@@ -8,8 +8,6 @@ pub mod finder;
 pub mod jina;
 pub mod open;
 pub mod reader;
-#[cfg(test)]
-mod tests;
 pub mod tinyfish;
 pub use self::{
     chunking::{TextChunk, TokenChunker},

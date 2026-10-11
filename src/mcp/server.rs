@@ -21,8 +21,6 @@ use rmcp::{
 use sonic_rs::Value;
 const SUPPORTED_PROTOCOL_VERSIONS: &[ProtocolVersion] =
     &[ProtocolVersion::V_2025_06_18, ProtocolVersion::V_2026_07_28];
-#[cfg(test)]
-mod tests;
 #[expect(
     clippy::missing_trait_methods,
     reason = "RMCP defaults are intentionally used for protocol hooks this tools-only server does not advertise."

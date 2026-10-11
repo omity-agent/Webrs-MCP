@@ -13,8 +13,6 @@ use fancy_regex::Regex;
 use futures::{StreamExt as _, stream};
 mod budget;
 pub use budget::BlockingPool;
-#[cfg(test)]
-mod tests;
 pub(crate) async fn open_pages(
     requests: &[OpenRequest],
     pages: Vec<Result<PageContent>>,

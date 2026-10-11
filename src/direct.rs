@@ -3,12 +3,8 @@
     reason = "The facade exposes domain types without duplicating their definitions."
 )]
 pub mod content;
-#[cfg(test)]
-mod decoding_tests;
 pub mod fetch;
 pub mod sites;
-#[cfg(test)]
-mod source_tests;
 pub mod target;
 use crate::config::DirectFetchConfig;
 pub(crate) use fetch::{SharedProbeFetch, fetch_direct_text, shared_probe_fetch};

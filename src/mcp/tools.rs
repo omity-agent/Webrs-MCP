@@ -16,8 +16,6 @@ use sonic_rs::Value;
 mod filesystem;
 mod identity;
 mod render;
-#[cfg(test)]
-mod tests;
 use identity::{reader_credentials, search_credentials};
 pub(crate) use render::ToolOutput;
 #[derive(Clone, Debug, Default, Eq, PartialEq)]

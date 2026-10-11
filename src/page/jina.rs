@@ -9,8 +9,6 @@ use finesse::{Frame, Parser};
 use reqwest::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue};
 use serde::Serialize;
 use sonic_rs::{JsonContainerTrait as _, JsonValueTrait as _, Value};
-#[cfg(test)]
-mod tests;
 #[derive(Clone)]
 pub struct JinaReaderClient {
     config: Arc<AppConfig>,

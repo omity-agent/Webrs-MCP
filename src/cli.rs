@@ -1,8 +1,6 @@
 mod access;
 pub mod oneshot;
 mod subcommands;
-#[cfg(test)]
-mod tests;
 use crate::{config::AppConfig, error::AppError, mcp::tools::ToolCredentials};
 use clap::{CommandFactory as _, FromArgMatches as _, Parser, ValueEnum};
 use clap_builder::{Arg, ArgAction, Command, Error};

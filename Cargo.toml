@@ -96,6 +96,23 @@ trim-paths = "all"
 name = "web-rs"
 version = "0.1.0"
 edition = "2024"
+autotests = false
+
+[lib]
+test = false
+
+[[bin]]
+name = "web-rs"
+path = "src/main.rs"
+test = false
+
+[[test]]
+name = "integration"
+path = "tests/integration/scenarios.rs"
+
+[[test]]
+name = "e2e"
+path = "tests/e2e/journeys.rs"
 
 [dependencies]
 anyhow = { version = "*", public = true }

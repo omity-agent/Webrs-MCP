@@ -13,8 +13,6 @@ use targets::direct_fetch_targets;
 use tracing::warn;
 mod batch;
 mod targets;
-#[cfg(test)]
-mod tests;
 #[derive(Clone, Debug)]
 pub struct PageContent {
     pub url: String,

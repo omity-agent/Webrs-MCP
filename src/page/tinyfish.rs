@@ -4,8 +4,6 @@ use futures::future::join_all;
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde::Serialize;
 mod response;
-#[cfg(test)]
-mod tests;
 use response::{extract_markdowns, service_error};
 #[derive(Clone)]
 pub struct TinyFishFetchClient {

@@ -14,8 +14,6 @@ use rmcp::{
         },
     },
 };
-#[cfg(test)]
-mod tests;
 pub(crate) fn http_service(config: &AppConfig) -> Result<Router> {
     let tools = tools::ToolService::new(config.clone())?;
     let modern = StreamableHttpService::new(
