@@ -23,6 +23,7 @@ pub(crate) async fn fetch_direct_text(
         let response = fetch_response(
             client,
             &target.request_url,
+            target.response_format,
             headers,
             direct_config,
             http_config,
@@ -61,16 +62,25 @@ pub(crate) fn shared_probe_fetch(
 async fn fetch_response(
     client: &SecureHttpClient,
     url: &str,
+    response_format: ResponseFormat,
     headers: HeaderMap,
     direct_config: &DirectFetchConfig,
     http_config: &HttpConfig,
 ) -> Result<FetchResponse> {
+    let max_bytes = match response_format {
+        ResponseFormat::RustdocJson => direct_config.docs_rs_max_bytes,
+        ResponseFormat::Markdown
+        | ResponseFormat::Text
+        | ResponseFormat::MediaWikiApi
+        | ResponseFormat::PackageRegistryJson
+        | ResponseFormat::StackOverflowQuestionJson => direct_config.max_bytes,
+    };
     client
         .get_with_body_limit(
             url,
             headers,
             http_config.direct_fetch_timeout_seconds,
-            direct_config.max_bytes,
+            max_bytes,
         )
         .await
 }
@@ -84,6 +94,7 @@ const fn accept_header(target: &DirectFetchTarget) -> &'static str {
     match target.response_format {
         ResponseFormat::Markdown => "text/markdown",
         ResponseFormat::Text => "text/plain,*/*",
+        ResponseFormat::RustdocJson => "application/json,application/zstd,application/gzip",
         ResponseFormat::MediaWikiApi
         | ResponseFormat::PackageRegistryJson
         | ResponseFormat::StackOverflowQuestionJson => "application/json",

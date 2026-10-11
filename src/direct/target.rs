@@ -6,6 +6,7 @@
 pub enum ResponseFormat {
     Markdown,
     Text,
+    RustdocJson,
     MediaWikiApi,
     PackageRegistryJson,
     StackOverflowQuestionJson,
@@ -48,6 +49,20 @@ impl DirectFetchTarget {
     {
         let mut target = Self::text(original_url, request_url);
         target.response_format = ResponseFormat::Markdown;
+        target
+    }
+    #[inline]
+    #[must_use]
+    pub fn rustdoc_json<OriginalUrl, RequestUrl>(
+        original_url: OriginalUrl,
+        request_url: RequestUrl,
+    ) -> Self
+    where
+        OriginalUrl: Into<String>,
+        RequestUrl: Into<String>,
+    {
+        let mut target = Self::text(original_url, request_url);
+        target.response_format = ResponseFormat::RustdocJson;
         target
     }
     #[inline]

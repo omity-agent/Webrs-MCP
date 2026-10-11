@@ -91,7 +91,11 @@ find:
 # Direct fetch behavior before falling back to a remote reader.
 direct_fetch:
   max_bytes: 1048576 # Maximum accepted direct response bytes.
+  docs_rs_max_bytes: 16777216 # Maximum compressed Rustdoc JSON response bytes.
   similarity_threshold: 0.9 # Reject generated Markdown URLs when their content is at least this similar to a random missing-URL probe.
+  docs_rs_hosts: # docs.rs hosts handled through Rustdoc JSON.
+    - docs.rs
+    - www.docs.rs
   github_hosts: # GitHub-style hosts.
     - github.com
     - raw.githubusercontent.com

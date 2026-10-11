@@ -130,6 +130,7 @@ clap = { git = "https://github.com/clap-rs/clap", features = [
 ], public = true }
 clap_builder = { git = "https://github.com/clap-rs/clap", public = true }
 content_inspector = "*"
+flate2 = "*"
 fancy-regex = { git = "https://github.com/fancy-regex/fancy-regex", public = true }
 finesse = { git = "https://github.com/ecmwf/aviso-client" }
 futures = { version = "*", public = true }
@@ -154,6 +155,7 @@ rmcp = { git = "https://github.com/modelcontextprotocol/rust-sdk", features = [
     "transport-io",
     "transport-streamable-http-server",
 ], public = true }
+rustdoc-types = "*"
 schemars = { version = "*", features = ["derive"] }
 serde = { version = "*", features = ["derive"], public = true }
 serde-saphyr = { git = "https://github.com/bourumir-wyngs/serde-saphyr" }
@@ -178,6 +180,7 @@ tracing = "*"
 tracing-subscriber = { version = "*", features = ["env-filter", "fmt"] }
 url = { version = "*", public = true }
 walkdir = "*"
+zstd = "*"
 
 [dev-dependencies]
 tempfile = "*"

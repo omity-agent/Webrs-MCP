@@ -2,7 +2,8 @@ use crate::{
     Result,
     direct::{
         sites::{
-            mediawiki::extract_mediawiki_content, package::format_package_registry_json,
+            docs_rs::format_rustdoc_json, mediawiki::extract_mediawiki_content,
+            package::format_package_registry_json,
             stack_overflow::format_stack_overflow_question_json,
         },
         target::{DirectFetchTarget, ResponseFormat},
@@ -67,6 +68,7 @@ fn extract_response(
         ResponseFormat::Markdown | ResponseFormat::Text => {
             decode_text(target.response_format, body)
         }
+        ResponseFormat::RustdocJson => format_rustdoc_json(headers, body),
         ResponseFormat::MediaWikiApi => extract_mediawiki_content(body),
         ResponseFormat::PackageRegistryJson => {
             let payload = package_registry_payload(body)?;
@@ -130,6 +132,7 @@ fn ensure_content_type(format: ResponseFormat, headers: &HeaderMap) -> Result<()
     let expected = match format {
         ResponseFormat::Markdown => "text/markdown",
         ResponseFormat::Text => "non-HTML textual content",
+        ResponseFormat::RustdocJson => "application/json, application/gzip, or application/zstd",
         ResponseFormat::MediaWikiApi
         | ResponseFormat::PackageRegistryJson
         | ResponseFormat::StackOverflowQuestionJson => "application/json",
@@ -156,6 +159,10 @@ fn ensure_content_type(format: ResponseFormat, headers: &HeaderMap) -> Result<()
                     || actual.essence_str() == "application/xml"
                     || actual.suffix() == Some(mime::XML))
         }
+        ResponseFormat::RustdocJson => matches!(
+            actual.essence_str(),
+            "application/json" | "application/gzip" | "application/zstd"
+        ),
         ResponseFormat::MediaWikiApi
         | ResponseFormat::PackageRegistryJson
         | ResponseFormat::StackOverflowQuestionJson => is_json(&actual),

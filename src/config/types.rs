@@ -78,7 +78,9 @@ pub struct FindConfig {
 #[serde(deny_unknown_fields)]
 pub struct DirectFetchConfig {
     pub max_bytes: usize,
+    pub docs_rs_max_bytes: usize,
     pub similarity_threshold: f64,
+    pub docs_rs_hosts: Vec<String>,
     pub github_hosts: Vec<String>,
     pub huggingface_hosts: Vec<String>,
     pub gitlab_hosts: Vec<String>,
@@ -130,6 +132,10 @@ impl AppConfig {
         )?;
         validation::positive(&self.find.max_matches_per_page, "find.max_matches_per_page")?;
         validation::positive(&self.direct_fetch.max_bytes, "direct_fetch.max_bytes")?;
+        validation::positive(
+            &self.direct_fetch.docs_rs_max_bytes,
+            "direct_fetch.docs_rs_max_bytes",
+        )?;
         validation::threshold(
             self.direct_fetch.similarity_threshold,
             "direct_fetch.similarity_threshold",

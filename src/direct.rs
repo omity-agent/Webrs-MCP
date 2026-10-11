@@ -8,7 +8,7 @@ pub mod sites;
 pub mod target;
 use crate::config::DirectFetchConfig;
 pub(crate) use fetch::{SharedProbeFetch, fetch_direct_text, shared_probe_fetch};
-use sites::{code_hosts, learn, mediawiki, package, stack_overflow};
+use sites::{code_hosts, docs_rs, learn, mediawiki, package, stack_overflow};
 pub use target::{DirectFetchTarget, ResponseFormat};
 #[inline]
 #[must_use]
@@ -18,6 +18,9 @@ pub fn resolve_direct_fetch_target(
 ) -> Option<DirectFetchTarget> {
     let parsed = url::Url::parse(url).ok()?;
     let host = parsed.host_str()?.to_ascii_lowercase();
+    if let Some(json_url) = docs_rs::resolve_rustdoc_json_url(&parsed, &host, config) {
+        return Some(DirectFetchTarget::rustdoc_json(url, json_url));
+    }
     if let Some(markdown_url) = learn::markdown_url(&parsed, config) {
         return Some(DirectFetchTarget::markdown(url, markdown_url));
     }
