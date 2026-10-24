@@ -86,6 +86,21 @@ async fn configuration_errors_stop_startup_even_when_only_help_is_requested() {
     }
 }
 #[tokio::test]
+async fn invalid_dynamic_highlights_beta_stops_startup() {
+    for beta in ["", " \t", "invalid\nheader"] {
+        let mut settings = renamed_settings();
+        settings.search.exa.dynamic_highlights_beta = beta.to_owned();
+        let file = settings_file(&settings);
+        let output = invoke(file.path(), &["--help"]).await;
+        assert!(!output.status.success() && output.stdout.is_empty());
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("search.exa.dynamic_highlights_beta"),
+            "{beta:?}: {:?}",
+            output.stderr
+        );
+    }
+}
+#[tokio::test]
 async fn failed_page_commands_return_formatted_failure_and_nonzero_exit_status() {
     let server = LocalServer::start(Router::new()).await;
     let file = settings_file(&renamed_settings());

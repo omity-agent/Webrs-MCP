@@ -20,20 +20,18 @@ pub(super) struct ExaPayload<'request> {
     #[serde(skip_serializing_if = "Option::is_none")]
     category: Option<&'request str>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    contents: Option<Contents<'request>>,
+    contents: Option<Contents>,
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct Contents<'request> {
-    highlights: Highlights<'request>,
+struct Contents {
+    highlights: Highlights,
     max_age_hours: u64,
     livecrawl_timeout: u32,
 }
 #[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct Highlights<'request> {
-    query: &'request str,
-    max_characters: u32,
+struct Highlights {
+    dynamic: bool,
 }
 #[derive(Deserialize)]
 struct Response {
@@ -61,10 +59,7 @@ pub(super) fn payload<'request>(
             .map(|date| date.date_naive().to_string()),
         category: request.category.as_ref().map(SearchCategory::as_str),
         contents: include_highlights.then_some(Contents {
-            highlights: Highlights {
-                query: &request.q,
-                max_characters: config.exa.highlights_max_characters,
-            },
+            highlights: Highlights { dynamic: true },
             max_age_hours: config.exa.max_age_hours,
             livecrawl_timeout: config.exa.livecrawl_timeout,
         }),

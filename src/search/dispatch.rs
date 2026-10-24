@@ -37,7 +37,7 @@ impl SearchClient {
         credentials: &SearchCredentials,
         include_highlights: bool,
     ) -> Result<SearchBatch> {
-        let headers = authentication(credentials)?;
+        let headers = self.headers(credentials, include_highlights)?;
         let pending = requests.iter().map(|request| {
             self.search_one(request, credentials, headers.clone(), include_highlights)
         });
@@ -55,6 +55,28 @@ impl SearchClient {
             );
         }
         Ok(batch)
+    }
+    fn headers(
+        &self,
+        credentials: &SearchCredentials,
+        include_highlights: bool,
+    ) -> Result<HeaderMap> {
+        let key = credentials.api_key();
+        if key.trim().is_empty() {
+            return Err(AppError::client("Search API key must not be empty."));
+        }
+        let mut value = HeaderValue::from_str(key)
+            .map_err(|error| AppError::client(format!("Invalid search API key header: {error}")))?;
+        value.set_sensitive(true);
+        let mut headers = HeaderMap::new();
+        headers.insert("x-api-key", value);
+        if include_highlights && matches!(credentials, SearchCredentials::Exa(_)) {
+            let beta = HeaderValue::from_str(&self.config.exa.dynamic_highlights_beta).map_err(
+                |error| AppError::config(format!("search.exa.dynamic_highlights_beta: {error}")),
+            )?;
+            headers.insert("exa-beta", beta);
+        }
+        Ok(headers)
     }
     async fn search_one(
         &self,
@@ -102,16 +124,4 @@ impl SearchClient {
             .await?;
         Ok(response.body)
     }
-}
-fn authentication(credentials: &SearchCredentials) -> Result<HeaderMap> {
-    let key = credentials.api_key();
-    if key.trim().is_empty() {
-        return Err(AppError::client("Search API key must not be empty."));
-    }
-    let mut value = HeaderValue::from_str(key)
-        .map_err(|error| AppError::client(format!("Invalid search API key header: {error}")))?;
-    value.set_sensitive(true);
-    let mut headers = HeaderMap::new();
-    headers.insert("x-api-key", value);
-    Ok(headers)
 }

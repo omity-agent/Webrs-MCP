@@ -30,11 +30,11 @@ headers:
 
 # Search behavior; the supplied API key selects exactly one backend.
 search:
-  num_results: 10 # Results per request.
+  num_results: 8 # Results per request.
   exa:
     endpoint: https://api.exa.ai/search # Exa search endpoint.
     type: deep # Exa search type.
-    highlights_max_characters: 600 # Highlight character budget.
+    dynamic_highlights_beta: dynamic-highlights-2026-08-28 # Exa-Beta value enabling Dynamic Highlights.
     max_age_hours: 9007199254740991 # Cache age policy sent to Exa.
     livecrawl_timeout: 30000 # Exa livecrawl timeout in milliseconds.
   octen:
@@ -79,7 +79,7 @@ tinyfish:
 # Token chunking behavior.
 chunking:
   tokenizer: o200k_base # Tokenizer name.
-  chunk_tokens: 2500 # Maximum tokens in one chunk.
+  chunk_tokens: 2000 # Maximum tokens in one chunk.
   overlap_ratio: 0.1 # Chunk overlap ratio.
   max_concurrent_tasks: 4 # Shared CPU limit across all tool calls, including cancelled callers.
 

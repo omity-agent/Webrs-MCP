@@ -14,7 +14,7 @@ pub struct ExaConfig {
     pub endpoint: String,
     #[serde(rename = "type")]
     pub search_type: String,
-    pub highlights_max_characters: u32,
+    pub dynamic_highlights_beta: String,
     pub max_age_hours: u64,
     pub livecrawl_timeout: u32,
 }
@@ -34,9 +34,14 @@ impl SearchConfig {
             ));
         }
         validation::endpoint(&self.exa.endpoint, "search.exa.endpoint")?;
-        validation::positive(
-            &self.exa.highlights_max_characters,
-            "search.exa.highlights_max_characters",
+        if self.exa.dynamic_highlights_beta.trim().is_empty() {
+            return Err(AppError::config(
+                "search.exa.dynamic_highlights_beta must not be empty",
+            ));
+        }
+        validation::header_value(
+            &self.exa.dynamic_highlights_beta,
+            "search.exa.dynamic_highlights_beta",
         )?;
         validation::positive(&self.exa.livecrawl_timeout, "search.exa.livecrawl_timeout")?;
         validation::endpoint(&self.octen.endpoint, "search.octen.endpoint")?;
