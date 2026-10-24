@@ -1,21 +1,27 @@
 use crate::{
     Result,
     error::AppError,
-    models::OpenPage,
+    models::{ChunkSelection, OpenPage, PagePartition},
     page::{PageContent, TokenChunker},
     warnings::Warnings,
 };
 #[expect(
     clippy::missing_inline_in_public_items,
-    reason = "Open-page chunk selection allocates chunks and keeps the response model terminology."
+    reason = "Opening a page copies its full content or selects a token chunk."
 )]
-pub fn open_page_chunk(
+pub fn open_page(
     page: &PageContent,
-    chunk_index: usize,
+    selection: Option<ChunkSelection>,
     request_index: usize,
     chunker: &TokenChunker,
     warnings: &mut Warnings,
 ) -> Result<OpenPage> {
+    let Some(ChunkSelection { chunk: chunk_index }) = selection else {
+        return Ok(OpenPage {
+            partition: None,
+            content: page.markdown.to_string(),
+        });
+    };
     let chunks = chunker.split(&page.markdown)?;
     let selected = if chunk_index >= chunks.len() {
         warnings.push(format!(
@@ -31,8 +37,10 @@ pub fn open_page_chunk(
             .ok_or_else(|| AppError::internal("validated page chunk was missing"))?
     };
     Ok(OpenPage {
-        chunk: selected.index,
-        total_chunks: chunks.len(),
+        partition: Some(PagePartition {
+            chunk: selected.index,
+            total_chunks: chunks.len(),
+        }),
         content: selected.content.clone(),
     })
 }

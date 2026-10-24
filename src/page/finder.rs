@@ -2,7 +2,7 @@ use crate::{
     Result,
     config::FindConfig,
     error::AppError,
-    models::{FindMatch, FindPage},
+    models::{ChunkSelection, FindMatch, FindPage, SplitCount},
     page::{PageContent, TokenChunker},
 };
 use fancy_regex::Regex;
@@ -16,33 +16,40 @@ pub fn find_in_page(
     snippet_tokens: usize,
     chunker: &TokenChunker,
     config: &FindConfig,
+    chunking: bool,
 ) -> Result<FindPage> {
-    let chunks = chunker.split(&page.markdown)?;
+    let chunks = chunking
+        .then(|| chunker.split(&page.markdown))
+        .transpose()?;
+    let count = chunks.as_ref().map(|parts| SplitCount {
+        total_chunks: parts.len(),
+    });
+    let regions = chunks.iter().flatten().map(|chunk| {
+        (
+            Some(ChunkSelection { chunk: chunk.index }),
+            chunk.content.as_str(),
+        )
+    });
+    let full_page = (!chunking).then_some((None, page.markdown.as_ref()));
     let mut matches = Vec::new();
-    for chunk in &chunks {
-        for found_result in regex.find_iter(&chunk.content) {
+    for (selection, content) in regions.chain(full_page) {
+        for found_result in regex.find_iter(content) {
             let found = found_result.map_err(|error| {
                 AppError::client(format!("regular expression match failed: {error}"))
             })?;
             matches.push(FindMatch {
-                chunk: chunk.index,
+                selection,
                 snippet: chunker.snippet_around_span(
-                    &chunk.content,
+                    content,
                     found.start(),
                     found.end(),
                     snippet_tokens,
                 )?,
             });
             if matches.len() >= config.max_matches_per_page {
-                return Ok(FindPage {
-                    total_chunks: chunks.len(),
-                    matches,
-                });
+                return Ok(FindPage { count, matches });
             }
         }
     }
-    Ok(FindPage {
-        total_chunks: chunks.len(),
-        matches,
-    })
+    Ok(FindPage { count, matches })
 }

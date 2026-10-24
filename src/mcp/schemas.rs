@@ -4,15 +4,16 @@ use crate::{
     config::ToolNames,
     error::AppError,
     models::{
-        FilesystemOpenArguments, FilesystemResponse, FilesystemSearchArguments, FindArguments,
-        FindResponse, OpenArguments, OpenResponse, SearchQueryArguments, SearchQueryResponse,
+        ChunkSelection, FilesystemOpenArguments, FilesystemResponse, FilesystemSearchArguments,
+        FindArguments, FindResponse, OpenArguments, OpenResponse, PagePartition,
+        SearchQueryArguments, SearchQueryResponse, SplitCount, Unpartitioned,
     },
 };
 use alloc::sync::Arc;
 use rmcp::model::{JsonObject, Tool};
 use schemars::{JsonSchema, generate::SchemaSettings, schema_for, transform::RestrictFormats};
 #[inline]
-pub fn tools(names: &ToolNames, mode: WorkMode) -> Result<Vec<Tool>> {
+pub fn tools(names: &ToolNames, mode: WorkMode, chunking: bool) -> Result<Vec<Tool>> {
     if mode == WorkMode::Filesystem {
         return Ok(vec![
             tool::<FilesystemSearchArguments, FilesystemResponse>(
@@ -22,17 +23,34 @@ pub fn tools(names: &ToolNames, mode: WorkMode) -> Result<Vec<Tool>> {
             tool::<FilesystemOpenArguments, FilesystemResponse>(&names.open, "Fetch the pages.")?,
         ]);
     }
-    Ok(vec![
-        tool::<SearchQueryArguments, SearchQueryResponse>(
-            &names.search_query,
-            "返回标题、日期、URL 与高亮内容。",
-        )?,
-        tool::<OpenArguments, OpenResponse>(&names.open, "Open the page indicated by `url`.")?,
-        tool::<FindArguments, FindResponse>(
-            &names.find,
-            "Find the text `pattern` in the page indicated by `url`.",
-        )?,
-    ])
+    let search = tool::<SearchQueryArguments, SearchQueryResponse>(
+        &names.search_query,
+        "返回标题、日期、URL 与高亮内容。",
+    )?;
+    let (open, find) = if chunking {
+        (
+            tool::<OpenArguments<ChunkSelection>, OpenResponse<PagePartition>>(
+                &names.open,
+                "Open a chunk of the page indicated by `url`.",
+            )?,
+            tool::<FindArguments, FindResponse<SplitCount, ChunkSelection>>(
+                &names.find,
+                "Find the text `pattern` in chunks of the page indicated by `url`.",
+            )?,
+        )
+    } else {
+        (
+            tool::<OpenArguments<Unpartitioned>, OpenResponse<Unpartitioned>>(
+                &names.open,
+                "Open the full page indicated by `url`.",
+            )?,
+            tool::<FindArguments, FindResponse<Unpartitioned, Unpartitioned>>(
+                &names.find,
+                "Find the text `pattern` in the full page indicated by `url`.",
+            )?,
+        )
+    };
+    Ok(vec![search, open, find])
 }
 fn tool<I, O>(name: &str, description: &'static str) -> Result<Tool>
 where

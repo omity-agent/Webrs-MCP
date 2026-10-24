@@ -73,11 +73,16 @@ pub(crate) fn assert_success(output: &Output) {
         String::from_utf8_lossy(&output.stderr)
     );
 }
-pub(crate) fn start_http(file: &NamedTempFile, environment: &[(&str, &str)]) -> Child {
+pub(crate) fn start_http(
+    file: &NamedTempFile,
+    arguments: &[&str],
+    environment: &[(&str, &str)],
+) -> Child {
     binary()
         .arg("--config")
         .arg(file.path())
         .arg("mcp")
+        .args(arguments)
         .envs(environment.iter().copied())
         .stdin(Stdio::null())
         .stdout(Stdio::null())
@@ -92,13 +97,18 @@ pub(crate) struct Process {
 }
 impl Process {
     pub fn start(file: &NamedTempFile, mode: &str) -> Self {
-        Self::start_with_env(file, mode, &[])
+        Self::start_configured(file, &["--mode", mode], &[])
     }
-    pub fn start_with_env(file: &NamedTempFile, mode: &str, environment: &[(&str, &str)]) -> Self {
+    pub fn start_configured(
+        file: &NamedTempFile,
+        arguments: &[&str],
+        environment: &[(&str, &str)],
+    ) -> Self {
         let mut child = binary()
             .arg("--config")
             .arg(file.path())
-            .args(["mcp", "--transport", "stdio", "--mode", mode])
+            .args(["mcp", "--transport", "stdio"])
+            .args(arguments)
             .envs(environment.iter().copied())
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

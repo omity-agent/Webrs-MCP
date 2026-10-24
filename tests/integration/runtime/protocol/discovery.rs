@@ -38,9 +38,10 @@ fn assert_strict_output(root: &Value) {
 }
 #[tokio::test]
 async fn discovery_and_tool_schemas_follow_configuration_in_json_and_sse_without_version_leaks() {
-    for json_response in [true, false] {
+    for (json_response, chunking) in [(true, true), (false, true), (true, false), (false, false)] {
         let mut settings = config::load_embedded().unwrap();
         settings.server.json_response = json_response;
+        settings.chunking.enabled = chunking;
         settings.server.name = "configured-web".to_owned();
         settings.tools.search_query = "lookup".to_owned();
         settings.tools.open = "browse".to_owned();
@@ -131,6 +132,16 @@ async fn discovery_and_tool_schemas_follow_configuration_in_json_and_sse_without
             let schema = tool.get("outputSchema").unwrap();
             assert_eq!(schema.pointer(path), Some(&json!("string")));
             assert_strict_output(schema);
+            if tool.get("name") != Some(&json!("lookup")) {
+                let encoded = sonic_rs::to_string(schema).unwrap();
+                for field in ["\"chunk\"", "\"total_chunks\""] {
+                    assert_eq!(encoded.contains(field), chunking, "{schema}");
+                }
+            }
+            if tool.get("name") == Some(&json!("browse")) {
+                let input = sonic_rs::to_string(tool.get("inputSchema").unwrap()).unwrap();
+                assert_eq!(input.contains("\"chunk\""), chunking, "{input}");
+            }
         }
     }
 }

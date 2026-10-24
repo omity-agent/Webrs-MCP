@@ -28,8 +28,8 @@ pub fn search_arguments(raw: Option<Value>) -> Result<Normalized<SearchQueryArgu
     typed::search_arguments(raw)
 }
 #[inline]
-pub fn open_arguments(raw: Option<Value>) -> Result<Normalized<OpenArguments>> {
-    typed::open_arguments(raw)
+pub fn open_arguments(raw: Option<Value>, chunking: bool) -> Result<Normalized<OpenArguments>> {
+    typed::open_arguments(raw, chunking)
 }
 #[inline]
 pub fn find_arguments(raw: Option<Value>) -> Result<Normalized<FindArguments>> {

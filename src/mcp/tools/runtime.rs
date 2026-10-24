@@ -23,7 +23,8 @@ impl ToolRuntime {
         config.validate()?;
         let shared_config = Arc::new(config);
         let http = secure_client_from_config(&shared_config)?;
-        let tools: Arc<[Tool]> = schemas::tools(&shared_config.tools, mode)?.into();
+        let tools: Arc<[Tool]> =
+            schemas::tools(&shared_config.tools, mode, shared_config.chunking.enabled)?.into();
         Ok(Self {
             chunker: TokenChunker::new(&shared_config.chunking)?,
             processing: BlockingPool::new(shared_config.chunking.max_concurrent_tasks)?,

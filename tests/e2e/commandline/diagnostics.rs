@@ -16,7 +16,6 @@ async fn invalid_cli_input_exits_without_success_output_or_network_io() {
         (vec!["lookup", ""], "value"),
         (vec!["browse", ""], "value"),
         (vec!["lookup", "one", "two"], "two"),
-        (vec!["browse", &url, "--chunk=-1"], "--chunk"),
         (vec!["lookup", "test", "--recency", "0"], "--recency"),
         (vec!["browse", &url, "--mode", "filesystem"], "--mode"),
         (

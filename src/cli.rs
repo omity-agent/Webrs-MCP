@@ -120,7 +120,8 @@ impl Cli {
             command,
             RuntimeCommand::Mcp(McpOptions {
                 transport: Transport::Http,
-                mode: _
+                mode: _,
+                no_chunking: _
             })
         ) {
             ToolCredentials::default()

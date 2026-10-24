@@ -7,6 +7,8 @@ pub struct McpOptions {
     pub transport: Transport,
     #[arg(long, value_enum, default_value_t)]
     pub mode: WorkMode,
+    #[arg(long, help = "Return full pages without chunk fields")]
+    pub no_chunking: bool,
 }
 impl McpOptions {
     pub(super) fn validate(self) -> Result<()> {

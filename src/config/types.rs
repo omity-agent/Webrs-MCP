@@ -63,6 +63,7 @@ pub struct TinyFishConfig {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ChunkingConfig {
+    pub enabled: bool,
     pub tokenizer: String,
     pub chunk_tokens: usize,
     pub overlap_ratio: f64,

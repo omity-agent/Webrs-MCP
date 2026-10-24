@@ -86,6 +86,7 @@ tinyfish:
 
 # Token chunking behavior.
 chunking:
+  enabled: true # MCP chunks by default; --no-chunking disables it. CLI always returns full pages.
   tokenizer: o200k_base # Tokenizer name.
   chunk_tokens: 2000 # Maximum tokens in one chunk.
   overlap_ratio: 0.1 # Chunk overlap ratio.

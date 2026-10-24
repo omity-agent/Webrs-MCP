@@ -1,6 +1,6 @@
 use crate::{
     Result,
-    cli::{McpOptions, RuntimeCommand, RuntimeOptions, Transport, WorkMode, oneshot::Invocation},
+    cli::{RuntimeCommand, RuntimeOptions, Transport, WorkMode, oneshot::Invocation},
     config::AppConfig,
     error::AppError,
     mcp::{self, handler::health, http_service, tools::ToolCredentials},
@@ -17,20 +17,20 @@ const HEALTH_PATH: &str = "/health";
     clippy::missing_inline_in_public_items,
     reason = "The async server entrypoint composes HTTP and stdio MCP services."
 )]
-pub async fn run(config: AppConfig, options: RuntimeOptions) -> anyhow::Result<()> {
+pub async fn run(mut config: AppConfig, options: RuntimeOptions) -> anyhow::Result<()> {
     options.validate().map_err(anyhow::Error::from)?;
     match options.command {
         RuntimeCommand::Tool(invocation) => {
+            config.chunking.enabled = false;
             run_command(config, options.credentials, invocation).await
         }
-        RuntimeCommand::Mcp(McpOptions {
-            transport: Transport::Http,
-            mode: _,
-        }) => run_http(config).await,
-        RuntimeCommand::Mcp(McpOptions {
-            transport: Transport::Stdio,
-            mode,
-        }) => run_stdio(config, mode, options.credentials).await,
+        RuntimeCommand::Mcp(mcp) => {
+            config.chunking.enabled &= !mcp.no_chunking;
+            match mcp.transport {
+                Transport::Http => run_http(config).await,
+                Transport::Stdio => run_stdio(config, mcp.mode, options.credentials).await,
+            }
+        }
     }
 }
 async fn run_command(

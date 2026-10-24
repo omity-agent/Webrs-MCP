@@ -108,7 +108,7 @@ impl ToolService {
         }))
     }
     async fn open(&self, arguments: Option<Value>, headers: &HeaderMap) -> Result<ToolOutput> {
-        let normalized = open_arguments(arguments)?;
+        let normalized = open_arguments(arguments, self.runtime.config.chunking.enabled)?;
         let warnings = normalized.warnings;
         let credentials = reader_credentials(
             headers,
@@ -164,7 +164,7 @@ impl ToolService {
             self.runtime.chunker.clone(),
             &self.runtime.processing,
             self.runtime.config.find.clone(),
-            self.runtime.config.chunking.chunk_tokens,
+            &self.runtime.config.chunking,
             warnings,
         )
         .await?;

@@ -13,5 +13,5 @@ pub use self::{
     chunking::{TextChunk, TokenChunker},
     fetcher::{PageContent, PageFetcher},
     finder::find_in_page,
-    open::open_page_chunk,
+    open::open_page,
 };

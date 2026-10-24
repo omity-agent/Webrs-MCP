@@ -31,8 +31,6 @@ struct SearchInput {
 struct OpenInput {
     #[arg(value_name = "URL", value_parser = clap::builder::NonEmptyStringValueParser::new())]
     url: String,
-    #[arg(long, default_value_t = 0)]
-    chunk: usize,
     #[command(flatten)]
     presentation: Presentation,
 }
@@ -41,7 +39,7 @@ pub(super) fn definitions(names: &ToolNames) -> [Command; 2] {
         SearchInput::augment_args(
             Command::new(names.search_query.clone()).about("Search with one query"),
         ),
-        OpenInput::augment_args(Command::new(names.open.clone()).about("Open one page chunk")),
+        OpenInput::augment_args(Command::new(names.open.clone()).about("Open one full page")),
     ]
 }
 pub(super) fn invocation(
@@ -67,7 +65,7 @@ pub(super) fn invocation(
             Invocation {
                 request: SingleRequest::Open(OpenRequest {
                     url: input.url,
-                    chunk: input.chunk,
+                    selection: None,
                 }),
                 format: input.presentation.format,
             }

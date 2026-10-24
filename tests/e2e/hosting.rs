@@ -27,6 +27,7 @@ async fn http_mcp_requires_request_headers_even_when_environment_keys_are_presen
     let file = settings_file(&settings);
     let mut child = start_http(
         &file,
+        &["--no-chunking"],
         &[
             ("EXA_API_KEY", "env-exa"),
             ("OCTEN_API_KEY", "env-octen"),
@@ -54,6 +55,20 @@ async fn http_mcp_requires_request_headers_even_when_environment_keys_are_presen
     })
     .await
     .unwrap();
+    let listed: Value = client
+        .post(format!("{address}/mcp"))
+        .header("accept", "application/json, text/event-stream")
+        .header("mcp-protocol-version", STATELESS)
+        .header("mcp-method", "tools/list")
+        .json(&request(STATELESS, "tools/list", json!({})))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let schema = sonic_rs::to_string(listed.pointer("/result/tools").unwrap()).unwrap();
+    assert!(!schema.contains("\"chunk\"") && !schema.contains("\"total_chunks\""));
     let body = request(
         STATELESS,
         "tools/call",

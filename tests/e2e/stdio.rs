@@ -117,7 +117,7 @@ async fn stdio_mcp_search_uses_environment_credentials() {
     let mut settings = server.settings();
     settings.tools = renamed_settings().tools;
     let file = settings_file(&settings);
-    let mut process = Process::start_with_env(&file, "response", &[("EXA_API_KEY", "stdio-key")]);
+    let mut process = Process::start_configured(&file, &[], &[("EXA_API_KEY", "stdio-key")]);
     let reply = process
         .call(&request(
             STATELESS,

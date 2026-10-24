@@ -4,90 +4,18 @@
 )]
 use crate::{
     Result,
-    config::FindConfig,
+    config::{ChunkingConfig, FindConfig},
     error::AppError,
-    models::{FindPage, FindRequest, FindResponse, OpenRequest, OpenResponse, OpenResult},
-    page::{PageContent, TokenChunker, find_in_page, open_page_chunk},
+    models::{FindPage, FindRequest, FindResponse},
+    page::{PageContent, TokenChunker, find_in_page},
     warnings::Warnings,
 };
 use fancy_regex::Regex;
 use futures::{StreamExt as _, stream};
 mod budget;
+mod opening;
 pub use budget::BlockingPool;
-pub(crate) async fn open_pages(
-    requests: &[OpenRequest],
-    pages: Vec<Result<PageContent>>,
-    chunker: TokenChunker,
-    pool: &BlockingPool,
-    mut warnings: Warnings,
-) -> OpenResponse {
-    let mut fetched_pages = pages.into_iter();
-    let max_concurrent_tasks = chunker.max_concurrent_tasks();
-    let tasks = requests.iter().cloned().enumerate().map(
-        |(request_index, request): (usize, OpenRequest)| {
-            let fetched = fetched_pages
-                .next()
-                .unwrap_or_else(|| Err(AppError::internal("page fetch result was missing")));
-            let page_chunker = chunker.clone();
-            let chunk_index = request.chunk;
-            let result_url = request.url.clone();
-            let task_url = request.url;
-            async move {
-                let task = pool.run(move || {
-                    Ok(process_open_result(
-                        task_url,
-                        fetched,
-                        chunk_index,
-                        request_index,
-                        &page_chunker,
-                    ))
-                });
-                task.await.unwrap_or_else(|error| {
-                    (
-                        OpenResult::Failure {
-                            url: result_url,
-                            error: error.client_message(),
-                        },
-                        Warnings::new(),
-                    )
-                })
-            }
-        },
-    );
-    let joined = stream::iter(tasks)
-        .buffered(max_concurrent_tasks)
-        .collect::<Vec<_>>()
-        .await;
-    let mut results = Vec::with_capacity(joined.len());
-    for (result, page_warnings) in joined {
-        results.push(result);
-        warnings.append(page_warnings);
-    }
-    OpenResponse {
-        results,
-        warning: warnings.into_option(),
-    }
-}
-fn process_open_result(
-    url: String,
-    fetched: Result<PageContent>,
-    chunk_index: usize,
-    request_index: usize,
-    chunker: &TokenChunker,
-) -> (OpenResult, Warnings) {
-    let mut warnings = Warnings::new();
-    let opened = fetched.and_then(|page| {
-        open_page_chunk(&page, chunk_index, request_index, chunker, &mut warnings)
-    });
-    let result = match opened {
-        Ok(page) => OpenResult::Success { url, page },
-        Err(error) => OpenResult::Failure {
-            url,
-            error: error.client_message(),
-        },
-    };
-    (result, warnings)
-}
+pub(crate) use opening::open_pages;
 pub(crate) async fn find_pages(
     requests: &[FindRequest],
     pages: Vec<PageContent>,
@@ -95,10 +23,12 @@ pub(crate) async fn find_pages(
     chunker: TokenChunker,
     pool: &BlockingPool,
     config: FindConfig,
-    chunk_tokens: usize,
+    chunking: &ChunkingConfig,
     mut warnings: Warnings,
 ) -> Result<FindResponse> {
     let max_concurrent_tasks = chunker.max_concurrent_tasks();
+    let enabled = chunking.enabled;
+    let snippet_limit = enabled.then_some(chunking.chunk_tokens);
     let tasks = requests
         .iter()
         .cloned()
@@ -120,7 +50,7 @@ pub(crate) async fn find_pages(
                             requested_snippet_tokens,
                             request_index,
                             &mut page_warnings,
-                            chunk_tokens,
+                            snippet_limit,
                             find_config.default_snippet_tokens,
                         );
                         let found = find_in_page(
@@ -129,6 +59,7 @@ pub(crate) async fn find_pages(
                             snippet_tokens,
                             &page_chunker,
                             &find_config,
+                            enabled,
                         )?;
                         Ok::<(FindPage, Warnings), AppError>((found, page_warnings))
                     })
@@ -177,15 +108,19 @@ fn snippet_tokens_for_request(
     requested: Option<usize>,
     request_index: usize,
     warnings: &mut Warnings,
-    chunk_tokens: usize,
+    chunk_limit: Option<usize>,
     default_snippet_tokens: usize,
 ) -> usize {
     let Some(value) = requested else {
         return default_snippet_tokens;
     };
-    if value <= chunk_tokens {
-        return value;
+    if let Some(limit) = chunk_limit
+        && value > limit
+    {
+        warnings.push(format!(
+            "\"requests[{request_index}].snippet_tokens\" exceeds chunk_tokens ({limit}); using {limit}"
+        ));
+        return limit;
     }
-    warnings . push (format ! ("\"requests[{request_index}].snippet_tokens\" exceeds chunk_tokens ({chunk_tokens}); using {chunk_tokens}")) ;
-    chunk_tokens
+    value
 }

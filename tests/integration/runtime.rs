@@ -6,3 +6,5 @@ mod network;
 mod protocol;
 #[cfg(test)]
 mod scheduling;
+#[cfg(test)]
+mod whole_content;

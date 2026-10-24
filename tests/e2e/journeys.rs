@@ -7,6 +7,8 @@ mod envelope;
 mod hosting;
 #[path = "../support/listener.rs"]
 mod listener;
+#[cfg(test)]
+mod pagination;
 #[path = "../support/process.rs"]
 mod process;
 #[cfg(test)]

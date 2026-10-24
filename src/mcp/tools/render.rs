@@ -109,8 +109,10 @@ fn open_result(xml: &mut PseudoXml, result: &OpenResult) {
 }
 fn open_page(xml: &mut PseudoXml, page: &OpenPage) {
     xml.open("PAGE");
-    xml.number("CHUNK", page.chunk);
-    xml.number("TOTAL_CHUNKS", page.total_chunks);
+    if let Some(partition) = page.partition {
+        xml.number("CHUNK", partition.chunk);
+        xml.number("TOTAL_CHUNKS", partition.total_chunks);
+    }
     xml.text("CONTENT", &page.content);
     xml.close("PAGE");
 }
@@ -121,7 +123,9 @@ fn find_text(response: &FindResponse) -> String {
     xml.finish()
 }
 fn find_page(xml: &mut PseudoXml, page: &FindPage) {
-    xml.number("TOTAL_CHUNKS", page.total_chunks);
+    if let Some(count) = page.count {
+        xml.number("TOTAL_CHUNKS", count.total_chunks);
+    }
     if page.matches.is_empty() {
         xml.empty("MATCHES");
     } else {
@@ -131,7 +135,9 @@ fn find_page(xml: &mut PseudoXml, page: &FindPage) {
     }
 }
 fn find_match(xml: &mut PseudoXml, found: &FindMatch) {
-    xml.number("CHUNK", found.chunk);
+    if let Some(selection) = found.selection {
+        xml.number("CHUNK", selection.chunk);
+    }
     xml.text("SNIPPET", &found.snippet);
 }
 fn warnings(xml: &mut PseudoXml, warning_values: Option<&[String]>) {

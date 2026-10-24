@@ -1,3 +1,14 @@
+#![expect(
+    clippy::pub_use,
+    reason = "The model facade groups page navigation and text matching contracts."
+)]
+mod matching;
+mod navigation;
+pub use matching::{FindArguments, FindMatch, FindPage, FindRequest, FindResponse};
+pub use navigation::{
+    ChunkSelection, OpenArguments, OpenPage, OpenRequest, OpenResponse, OpenResult, PagePartition,
+    SplitCount, Unpartitioned,
+};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize, Serializer};
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, clap :: ValueEnum)]
@@ -91,15 +102,6 @@ where
 {
     serializer.collect_seq(groups.iter().flatten())
 }
-#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
-pub struct OpenRequest {
-    pub url: String,
-    pub chunk: usize,
-}
-#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
-pub struct OpenArguments {
-    pub requests: Vec<OpenRequest>,
-}
 #[derive(Clone, Debug, Deserialize, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct FilesystemOpenArguments {
@@ -113,60 +115,4 @@ pub struct FilesystemResponse {
     pub output_path: String,
     pub error: String,
     pub warning: String,
-}
-#[derive(Clone, Debug, JsonSchema, Serialize)]
-#[schemars(deny_unknown_fields)]
-pub struct OpenPage {
-    pub chunk: usize,
-    pub total_chunks: usize,
-    pub content: String,
-}
-#[derive(Clone, Debug, JsonSchema, Serialize)]
-#[serde(untagged)]
-#[schemars(deny_unknown_fields)]
-#[expect(
-    clippy::exhaustive_enums,
-    reason = "Open results have exactly one success or failure payload."
-)]
-pub enum OpenResult {
-    Success { url: String, page: OpenPage },
-    Failure { url: String, error: String },
-}
-#[derive(Clone, Debug, JsonSchema, Serialize)]
-#[schemars(deny_unknown_fields)]
-pub struct OpenResponse {
-    pub results: Vec<OpenResult>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub warning: Option<Vec<String>>,
-}
-#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
-pub struct FindRequest {
-    pub url: String,
-    #[schemars(description = "Regex are allowed")]
-    pub pattern: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub snippet_tokens: Option<usize>,
-}
-#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
-pub struct FindArguments {
-    pub requests: Vec<FindRequest>,
-}
-#[derive(Clone, Debug, JsonSchema, Serialize)]
-#[schemars(deny_unknown_fields)]
-pub struct FindMatch {
-    pub chunk: usize,
-    pub snippet: String,
-}
-#[derive(Clone, Debug, JsonSchema, Serialize)]
-#[schemars(deny_unknown_fields)]
-pub struct FindPage {
-    pub total_chunks: usize,
-    pub matches: Vec<FindMatch>,
-}
-#[derive(Clone, Debug, JsonSchema, Serialize)]
-#[schemars(deny_unknown_fields)]
-pub struct FindResponse {
-    pub pages: Vec<FindPage>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub warning: Option<Vec<String>>,
 }

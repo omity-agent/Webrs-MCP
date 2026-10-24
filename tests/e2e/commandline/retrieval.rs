@@ -10,51 +10,34 @@ use axum::{
 };
 use rmcp::serde_json::{Value, json};
 #[tokio::test]
-async fn configured_open_delivers_real_local_content_with_a_positional_url_and_chunk_parameter() {
+async fn configured_open_delivers_full_local_content_in_json_and_xml() {
     let server = LocalServer::start(Router::new().route(
         "/page",
         get(|| async { ([("content-type", "text/markdown")], PAGE) }),
     ))
     .await;
-    let file = settings_file(&renamed_settings());
+    let mut settings = renamed_settings();
+    settings.chunking.chunk_tokens = 2;
+    let file = settings_file(&settings);
     let url = format!("{}/page", server.address);
-    let opened = invoke(
-        file.path(),
-        &["browse", &url, "--chunk", "99", "--format", "json"],
-    )
-    .await;
-    assert_success(&opened);
-    let response: Value = sonic_rs::from_str(stdout(&opened)).unwrap();
-    assert_eq!(
-        response.pointer("/results/0/page/content"),
-        Some(&json!(PAGE))
-    );
-    assert_eq!(
-        response.pointer("/results/0/page/chunk"),
-        Some(&json!(0_u64))
-    );
-    assert_eq!(
-        response.pointer("/results/0/page/total_chunks"),
-        Some(&json!(1_u64))
-    );
-    assert!(
-        response
-            .pointer("/warning/0")
-            .unwrap()
-            .as_str()
-            .unwrap()
-            .contains("using 0")
-    );
-    assert_eq!(
-        server
-            .visits
-            .lock()
-            .await
-            .iter()
-            .filter(|visit| visit.uri == "/page")
-            .count(),
-        2
-    );
+    for format in ["json", "xml"] {
+        let opened = invoke(file.path(), &["browse", &url, "--format", format]).await;
+        assert_success(&opened);
+        if format == "json" {
+            let response: Value = sonic_rs::from_str(stdout(&opened)).unwrap();
+            assert_eq!(
+                response,
+                json!({ "results": [{ "url": url, "page": { "content": PAGE } }] })
+            );
+        } else {
+            assert_eq!(
+                stdout(&opened),
+                format!(
+                    "<0>\n<URL>\n{url}\n</URL>\n<PAGE>\n<CONTENT>\n{PAGE}\n</CONTENT>\n</PAGE>\n</0>\n"
+                )
+            );
+        }
+    }
     assert!(
         server
             .visits

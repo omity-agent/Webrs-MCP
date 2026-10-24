@@ -2,14 +2,14 @@ use crate::{
     Result,
     arguments::{
         Normalized,
-        aliases::{FIND_FIELDS, OPEN_FIELDS, SEARCH_FIELDS},
+        aliases::{FIND_FIELDS, OPEN_FIELDS, PAGE_FIELDS, SEARCH_FIELDS},
         normalizer::normalize_requests,
         request::RequestMap,
     },
     error::AppError,
     models::{
-        FindArguments, FindRequest, OpenArguments, OpenRequest, SearchQueryArguments,
-        SearchQueryRequest,
+        ChunkSelection, FindArguments, FindRequest, OpenArguments, OpenRequest,
+        SearchQueryArguments, SearchQueryRequest,
     },
     warnings::Warnings,
 };
@@ -39,14 +39,23 @@ pub fn search_arguments(raw: Option<Value>) -> Result<Normalized<SearchQueryArgu
     Ok(Normalized::new(SearchQueryArguments { requests }, warnings))
 }
 #[inline]
-pub fn open_arguments(raw: Option<Value>) -> Result<Normalized<OpenArguments>> {
-    let (mut maps, mut warnings) = normalize_requests(raw, OPEN_FIELDS, Some("url"))?;
-    normalize_open_chunks(&mut maps, &mut warnings);
+pub fn open_arguments(raw: Option<Value>, chunking: bool) -> Result<Normalized<OpenArguments>> {
+    let fields = if chunking { OPEN_FIELDS } else { PAGE_FIELDS };
+    let (mut maps, mut warnings) = normalize_requests(raw, fields, Some("url"))?;
+    if chunking {
+        normalize_open_chunks(&mut maps, &mut warnings);
+    }
     let mut requests = Vec::with_capacity(maps.len());
     for (index, map) in maps.iter().enumerate() {
         let url = required_http_url(map, "url", &format!("requests[{index}].url"))?;
-        let chunk = required_usize(map, "chunk", &format!("requests[{index}].chunk"))?;
-        requests.push(OpenRequest { url, chunk });
+        let selection = if chunking {
+            Some(ChunkSelection {
+                chunk: required_usize(map, "chunk", &format!("requests[{index}].chunk"))?,
+            })
+        } else {
+            None
+        };
+        requests.push(OpenRequest { url, selection });
     }
     Ok(Normalized::new(OpenArguments { requests }, warnings))
 }

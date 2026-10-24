@@ -14,6 +14,7 @@ pub const SEARCH_FIELDS: &[FieldSpec] = &[
     FieldSpec::new("domains", &["domain", "urls", "url"]),
     FieldSpec::new("category", &["categories", "type", "class"]),
 ];
+pub const PAGE_FIELDS: &[FieldSpec] = &[FieldSpec::new("url", &["urls", "domain", "domains"])];
 pub const OPEN_FIELDS: &[FieldSpec] = &[
     FieldSpec::new("url", &["urls", "domain", "domains"]),
     FieldSpec::new("chunk", &["chunks", "block", "blocks", "piece", "pieces"]),
