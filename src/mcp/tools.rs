@@ -103,7 +103,7 @@ impl ToolService {
         let mut warnings = normalized.warnings;
         warnings.append(batch.warnings);
         Ok(ToolOutput::Search(SearchQueryResponse {
-            results: batch.groups.into_iter().flatten().collect(),
+            groups: batch.groups,
             warning: warnings.into_option(),
         }))
     }

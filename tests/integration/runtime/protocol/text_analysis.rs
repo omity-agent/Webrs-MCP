@@ -15,7 +15,7 @@ async fn open_preserves_overlap_order_partial_failures_and_chunk_correction_warn
     let service = ToolService::new(settings).unwrap();
     let url = format!("{}/page", server.address);
     let missing = format!("{}/missing", server.address);
-    let reply = channel :: call (service , "tools/call" , json ! ({ "name" : "open" , "arguments" : { "requests" : [{ "url" : url , "chunk" : 0_u64 } , { "url" : url , "chunk" : 2_u64 } , { "url" : url , "chunk" : 99_u64 } , { "url" : missing , "chunk" : 0_u64 }] } }) ,) . await ;
+    let reply = channel :: call (service , "tools/call" , json ! ({ "name" : "open" , "arguments" : { "requests" : [{ "url" : url , "chunk" : 0_u64 } , { "url" : missing , "chunk" : 0_u64 } , { "url" : url , "chunk" : 2_u64 } , { "url" : url , "chunk" : 99_u64 }] } }) ,) . await ;
     assert_eq!(
         reply.pointer("/result/isError"),
         Some(&json!(false)),
@@ -31,7 +31,7 @@ async fn open_preserves_overlap_order_partial_failures_and_chunk_correction_warn
         clippy::pattern_type_mismatch,
         reason = "Borrowed JSON results are destructured without copying the response envelope."
     )]
-    let [first, last, corrected, failed] = results.as_slice() else {
+    let [first, failed, last, corrected] = results.as_slice() else {
         panic!("expected four ordered open results: {results:?}");
     };
     for (result, chunk, content) in [
@@ -60,7 +60,7 @@ async fn open_preserves_overlap_order_partial_failures_and_chunk_correction_warn
         .as_str()
         .unwrap();
     assert!(
-        warning.contains("requests[2].chunk") && warning.contains("using 0"),
+        warning.contains("requests[3].chunk") && warning.contains("using 0"),
         "{warning}"
     );
     let text = reply
@@ -68,7 +68,13 @@ async fn open_preserves_overlap_order_partial_failures_and_chunk_correction_warn
         .unwrap()
         .as_str()
         .unwrap();
-    assert!(text.contains("<ERROR>") && text.contains(warning));
+    assert!(text.starts_with(&format!("<0>\n<URL>\n{url}\n</URL>\n<PAGE>")));
+    assert!(text.contains(&format!("</0>\n<1>\n<URL>\n{missing}\n</URL>\n<ERROR>")));
+    assert!(text.contains("</ERROR>\n</1>\n<2>"));
+    assert!(text.contains("</PAGE>\n</2>\n<3>"));
+    assert!(text.ends_with(&format!(
+        "</PAGE>\n</3>\n<WARNINGS>\n<WARNING>\n{warning}\n</WARNING>\n</WARNINGS>"
+    )));
     assert_eq!(
         server
             .visits
@@ -98,7 +104,7 @@ async fn find_honors_unicode_regex_snippet_and_match_limits_and_validates_before
     let encoder = tiktoken::get_encoding(&settings.chunking.tokenizer).unwrap();
     let service = ToolService::new(settings).unwrap();
     let url = format!("{}/page", server.address);
-    let reply = channel :: call (service . clone () , "tools/call" , json ! ({ "name" : "find" , "arguments" : { "requests" : [{ "url" : url , "pattern" : "中文(?=!)" , "snippet_tokens" : 5_u64 } , { "url" : url , "pattern" : "absent" , "snippet_tokens" : 2000_u64 }] } }) ,) . await ;
+    let reply = channel :: call (service . clone () , "tools/call" , json ! ({ "name" : "find" , "arguments" : { "requests" : [{ "url" : url , "pattern" : "中文(?=!)" , "snippet_tokens" : 5_u64 } , { "url" : url , "pattern" : "absent" , "snippet_tokens" : 2000_u64 } , { "url" : url , "pattern" : "中文(?=!)" , "snippet_tokens" : 5_u64 }] } }) ,) . await ;
     assert_eq!(
         reply.pointer("/result/isError"),
         Some(&json!(false)),
@@ -109,14 +115,15 @@ async fn find_honors_unicode_regex_snippet_and_match_limits_and_validates_before
         .unwrap()
         .as_array()
         .unwrap();
-    assert_eq!(pages.len(), 2);
+    assert_eq!(pages.len(), 3);
     #[expect(
         clippy::pattern_type_mismatch,
         reason = "Borrowed JSON pages are destructured without copying the response envelope."
     )]
-    let [found_page, empty_page] = pages.as_slice() else {
-        panic!("expected two ordered find results: {pages:?}");
+    let [found_page, empty_page, repeated_page] = pages.as_slice() else {
+        panic!("expected three ordered find results: {pages:?}");
     };
+    assert_eq!(repeated_page, found_page);
     assert_eq!(found_page.get("total_chunks"), Some(&json!(1_u64)));
     let matches = found_page.get("matches").unwrap().as_array().unwrap();
     assert_eq!(matches.len(), 2);
@@ -136,13 +143,25 @@ async fn find_honors_unicode_regex_snippet_and_match_limits_and_validates_before
         warning.contains("requests[1].snippet_tokens") && warning.contains("1000"),
         "{warning}"
     );
-    assert!(
-        reply
-            .pointer("/result/content/0/text")
-            .unwrap()
-            .as_str()
-            .unwrap()
-            .contains("<MATCHES>\n\n</MATCHES>")
+    let expected_matches = matches
+        .iter()
+        .enumerate()
+        .map(|(index, found)| {
+            let snippet = found.get("snippet").unwrap().as_str().unwrap();
+            format!("<{index}>\n<CHUNK>\n0\n</CHUNK>\n<SNIPPET>\n{snippet}\n</SNIPPET>\n</{index}>")
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert_eq!(
+        reply.pointer("/result/content/0/text"),
+        Some(&json!(format!(
+            "<0>\n<TOTAL_CHUNKS>\n1\n</TOTAL_CHUNKS>\n\
+             <MATCHES>\n{expected_matches}\n</MATCHES>\n</0>\n\
+             <1>\n<TOTAL_CHUNKS>\n1\n</TOTAL_CHUNKS>\n<MATCHES>\n\n</MATCHES>\n</1>\n\
+             <2>\n<TOTAL_CHUNKS>\n1\n</TOTAL_CHUNKS>\n\
+             <MATCHES>\n{expected_matches}\n</MATCHES>\n</2>\n\
+             <WARNINGS>\n<WARNING>\n{warning}\n</WARNING>\n</WARNINGS>"
+        )))
     );
     server.visits.lock().await.clear();
     let invalid = channel :: call (service , "tools/call" , json ! ({ "name" : "find" , "arguments" : { "requests" : [{ "url" : url , "pattern" : "[" }] } }) ,) . await ;

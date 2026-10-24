@@ -66,11 +66,11 @@ async fn configured_search_runs_once_per_command_and_outputs_default_xml_or_stan
             assert_eq!(
                 text,
                 concat!(
-                    "<RESULTS>\n<RESULT>\n",
+                    "<0>\n",
                     "<TITLE>\nA&B <title>\n</TITLE>\n",
                     "<URL>\nhttps://example.org/\n</URL>\n",
                     "<HIGHLIGHT>\nFound & <match>\n</HIGHLIGHT>\n",
-                    "</RESULT>\n</RESULTS>\n"
+                    "</0>\n"
                 )
             );
         }

@@ -1,5 +1,5 @@
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, clap :: ValueEnum)]
 #[serde(rename_all = "kebab-case")]
 #[expect(
@@ -76,9 +76,20 @@ pub struct SearchResult {
 #[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(deny_unknown_fields)]
 pub struct SearchQueryResponse {
-    pub results: Vec<SearchResult>,
+    #[serde(rename = "results", serialize_with = "serialize_search_groups")]
+    #[schemars(rename = "results", with = "Vec<SearchResult>")]
+    pub groups: Vec<Vec<SearchResult>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub warning: Option<Vec<String>>,
+}
+fn serialize_search_groups<S>(
+    groups: &[Vec<SearchResult>],
+    serializer: S,
+) -> core::result::Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.collect_seq(groups.iter().flatten())
 }
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 pub struct OpenRequest {

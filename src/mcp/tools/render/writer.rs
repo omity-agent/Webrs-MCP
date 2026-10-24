@@ -36,12 +36,18 @@ impl PseudoXml {
     pub(super) fn number(&mut self, tag: &str, value: usize) {
         self.text(tag, &value.to_string());
     }
+    pub(super) fn indexed<T>(&mut self, values: &[T], render: impl Fn(&mut Self, &T)) {
+        for (index, value) in values.iter().enumerate() {
+            let tag = index.to_string();
+            self.open(&tag);
+            render(self, value);
+            self.close(&tag);
+        }
+    }
     pub(super) fn finish(mut self) -> String {
-        assert_eq!(
-            self.text.pop(),
-            Some('\n'),
-            "pseudo XML must end with a line feed"
-        );
+        if let Some(last) = self.text.pop() {
+            assert_eq!(last, '\n', "pseudo XML must end with a line feed");
+        }
         self.text
     }
 }

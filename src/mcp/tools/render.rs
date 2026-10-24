@@ -3,7 +3,7 @@ use crate::{
     cli::oneshot::OutputFormat,
     error::AppError,
     models::{
-        FilesystemResponse, FindMatch, FindResponse, OpenPage, OpenResponse, OpenResult,
+        FilesystemResponse, FindMatch, FindPage, FindResponse, OpenPage, OpenResponse, OpenResult,
         SearchQueryResponse, SearchResult,
     },
 };
@@ -69,20 +69,13 @@ fn filesystem_text(response: &FilesystemResponse) -> String {
 }
 fn search_text(response: &SearchQueryResponse) -> String {
     let mut xml = PseudoXml::new();
-    if response.results.is_empty() {
-        xml.empty("RESULTS");
-    } else {
-        xml.open("RESULTS");
-        for result in &response.results {
-            search_result(&mut xml, result);
-        }
-        xml.close("RESULTS");
+    for group in &response.groups {
+        xml.indexed(group, search_result);
     }
     warnings(&mut xml, response.warning.as_deref());
     xml.finish()
 }
 fn search_result(xml: &mut PseudoXml, result: &SearchResult) {
-    xml.open("RESULT");
     if let Some(title) = result.title.as_deref() {
         xml.text("TITLE", title);
     }
@@ -91,36 +84,28 @@ fn search_result(xml: &mut PseudoXml, result: &SearchResult) {
     }
     xml.text("URL", &result.url);
     xml.text("HIGHLIGHT", &result.highlight);
-    xml.close("RESULT");
+}
+fn open_text(response: &OpenResponse) -> String {
+    let mut xml = PseudoXml::new();
+    xml.indexed(&response.results, open_result);
+    warnings(&mut xml, response.warning.as_deref());
+    xml.finish()
 }
 #[expect(
     clippy::pattern_type_mismatch,
     reason = "Matching borrowed open results avoids cloning page and error payloads."
 )]
-fn open_text(response: &OpenResponse) -> String {
-    let mut xml = PseudoXml::new();
-    if response.results.is_empty() {
-        xml.empty("RESULTS");
-    } else {
-        xml.open("RESULTS");
-        for result in &response.results {
-            xml.open("RESULT");
-            match result {
-                OpenResult::Success { url, page } => {
-                    xml.text("URL", url);
-                    open_page(&mut xml, page);
-                }
-                OpenResult::Failure { url, error } => {
-                    xml.text("URL", url);
-                    xml.text("ERROR", error);
-                }
-            }
-            xml.close("RESULT");
+fn open_result(xml: &mut PseudoXml, result: &OpenResult) {
+    match result {
+        OpenResult::Success { url, page } => {
+            xml.text("URL", url);
+            open_page(xml, page);
         }
-        xml.close("RESULTS");
+        OpenResult::Failure { url, error } => {
+            xml.text("URL", url);
+            xml.text("ERROR", error);
+        }
     }
-    warnings(&mut xml, response.warning.as_deref());
-    xml.finish()
 }
 fn open_page(xml: &mut PseudoXml, page: &OpenPage) {
     xml.open("PAGE");
@@ -131,34 +116,23 @@ fn open_page(xml: &mut PseudoXml, page: &OpenPage) {
 }
 fn find_text(response: &FindResponse) -> String {
     let mut xml = PseudoXml::new();
-    if response.pages.is_empty() {
-        xml.empty("PAGES");
-    } else {
-        xml.open("PAGES");
-        for page in &response.pages {
-            xml.open("PAGE");
-            xml.number("TOTAL_CHUNKS", page.total_chunks);
-            if page.matches.is_empty() {
-                xml.empty("MATCHES");
-            } else {
-                xml.open("MATCHES");
-                for found in &page.matches {
-                    find_match(&mut xml, found);
-                }
-                xml.close("MATCHES");
-            }
-            xml.close("PAGE");
-        }
-        xml.close("PAGES");
-    }
+    xml.indexed(&response.pages, find_page);
     warnings(&mut xml, response.warning.as_deref());
     xml.finish()
 }
+fn find_page(xml: &mut PseudoXml, page: &FindPage) {
+    xml.number("TOTAL_CHUNKS", page.total_chunks);
+    if page.matches.is_empty() {
+        xml.empty("MATCHES");
+    } else {
+        xml.open("MATCHES");
+        xml.indexed(&page.matches, find_match);
+        xml.close("MATCHES");
+    }
+}
 fn find_match(xml: &mut PseudoXml, found: &FindMatch) {
-    xml.open("MATCH");
     xml.number("CHUNK", found.chunk);
     xml.text("SNIPPET", &found.snippet);
-    xml.close("MATCH");
 }
 fn warnings(xml: &mut PseudoXml, warning_values: Option<&[String]>) {
     let Some(values) = warning_values else {

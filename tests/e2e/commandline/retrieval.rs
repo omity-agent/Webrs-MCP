@@ -55,9 +55,10 @@ async fn configured_open_and_find_deliver_real_local_content_with_chunk_and_rege
     .await;
     assert_success(&found);
     let text = stdout(&found);
-    assert!(text.starts_with("<PAGES>\n<PAGE>\n<TOTAL_CHUNKS>\n1\n"));
+    assert!(text.starts_with("<0>\n<TOTAL_CHUNKS>\n1\n</TOTAL_CHUNKS>\n<MATCHES>\n<0>\n"));
     assert!(text.contains("<CHUNK>\n0\n</CHUNK>"));
     assert!(text.contains("<SNIPPET>") && text.contains("needle is here"));
+    assert!(text.ends_with("</SNIPPET>\n</0>\n</MATCHES>\n</0>\n"));
     assert_eq!(
         server
             .visits
