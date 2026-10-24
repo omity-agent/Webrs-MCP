@@ -1,6 +1,6 @@
 use crate::{
     listener::LocalServer,
-    process::{assert_success, invoke, renamed_settings, settings_file, stdout},
+    process::{assert_success, invoke_with_env, renamed_settings, settings_file, stdout},
 };
 use alloc::sync::Arc;
 use axum::{Json, Router, extract::State, http::HeaderMap, routing::post};
@@ -32,10 +32,7 @@ async fn configured_search_runs_once_per_command_and_outputs_default_xml_or_stan
     for format in [None, Some("json")] {
         let mut arguments = vec![
             "lookup",
-            "--q",
             "one query",
-            "--exa-api-key",
-            "cli-key",
             "--domains",
             "example.org",
             "--category",
@@ -44,7 +41,7 @@ async fn configured_search_runs_once_per_command_and_outputs_default_xml_or_stan
         if let Some(value) = format {
             arguments.extend(["--format", value]);
         }
-        let output = invoke(file.path(), &arguments).await;
+        let output = invoke_with_env(file.path(), &arguments, &[("EXA_API_KEY", "cli-key")]).await;
         assert_success(&output);
         let text = stdout(&output);
         if format.is_some() {
@@ -91,21 +88,13 @@ async fn provider_and_ignored_filter_warnings_survive_both_cli_output_formats() 
     let server = LocalServer :: start (Router :: new () . route ("/api" , post (| | async { Json (json ! ({ "code" : 0_i64 , "msg" : "ok" , "data" : { "results" : [] } , "meta" : { "warning" : "Provider notice" } })) }))) . await ;
     let mut settings = renamed_settings();
     settings.search.octen.endpoint = format!("{}/api", server.address);
+    settings.environment.octen = "WEB_TEST_OCTEN_KEY".to_owned();
     let file = settings_file(&settings);
     for format in ["xml", "json"] {
-        let output = invoke(
+        let output = invoke_with_env(
             file.path(),
-            &[
-                "lookup",
-                "--q",
-                "test",
-                "--octen-api-key",
-                "key",
-                "--category",
-                "news",
-                "--format",
-                format,
-            ],
+            &["lookup", "test", "--category", "news", "--format", format],
+            &[("WEB_TEST_OCTEN_KEY", "key")],
         )
         .await;
         assert_success(&output);

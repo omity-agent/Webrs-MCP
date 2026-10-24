@@ -93,7 +93,7 @@ autotests = false
 test = false
 
 [[bin]]
-name = "web-rs"
+name = "web"
 path = "src/main.rs"
 test = false
 

@@ -2,7 +2,7 @@ use crate::{
     Result,
     config::ToolKind,
     error::AppError,
-    models::{FindRequest, OpenRequest, SearchQueryRequest},
+    models::{OpenRequest, SearchQueryRequest},
 };
 use clap::ValueEnum;
 use sonic_rs::Value;
@@ -23,7 +23,6 @@ pub struct Invocation {
 pub enum SingleRequest {
     Search(SearchQueryRequest),
     Open(OpenRequest),
-    Find(FindRequest),
 }
 impl SingleRequest {
     #[inline]
@@ -32,7 +31,6 @@ impl SingleRequest {
         match *self {
             Self::Search(_) => ToolKind::Search,
             Self::Open(_) => ToolKind::Open,
-            Self::Find(_) => ToolKind::Find,
         }
     }
     pub(crate) fn into_arguments(self) -> Result<(ToolKind, Value)> {
@@ -40,7 +38,6 @@ impl SingleRequest {
         let encoded = match self {
             Self::Search(request) => sonic_rs::to_value(&request),
             Self::Open(request) => sonic_rs::to_value(&request),
-            Self::Find(request) => sonic_rs::to_value(&request),
         }
         .map_err(|error| AppError::internal(format!("failed to encode CLI request: {error}")))?;
         Ok((kind, sonic_rs :: json ! ({ "requests" : [encoded] })))

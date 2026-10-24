@@ -1,3 +1,4 @@
+mod environment;
 mod naming;
 mod protocol;
 mod providers;
@@ -8,6 +9,7 @@ use std::path::Path;
 pub type AppConfig = types::AppConfig;
 pub type ChunkingConfig = types::ChunkingConfig;
 pub type DirectFetchConfig = types::DirectFetchConfig;
+pub type EnvironmentConfig = environment::EnvironmentConfig;
 pub type FindConfig = types::FindConfig;
 pub type HeaderConfig = types::HeaderConfig;
 pub type HttpConfig = types::HttpConfig;

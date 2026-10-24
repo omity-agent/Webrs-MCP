@@ -52,6 +52,11 @@ impl ToolNames {
                     "{field} must start with an ASCII letter, digit, or underscore, contain only ASCII letters, digits, underscores, hyphens, or dots, and not be 'help'"
                 )));
             }
+            if name == "mcp" && field != "tools.find" {
+                return Err(AppError::config(format!(
+                    "{field} cannot be 'mcp', which is reserved for the MCP server command."
+                )));
+            }
             if !seen.insert(name) {
                 return Err(AppError::config(format!(
                     "{field} duplicates another tool name: {name}"

@@ -5,13 +5,13 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 $projectRoot = Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")
-$BinaryPath = Join-Path $projectRoot.Path ("target\{0}\release\web-rs" -f $Target)
+$BinaryPath = Join-Path $projectRoot.Path ("target\{0}\release\web" -f $Target)
 & cargo zigbuild --release --target $Target --manifest-path (Join-Path $projectRoot.Path "Cargo.toml")
 if ($LASTEXITCODE -ne 0) {
     throw "cargo build failed with exit code $LASTEXITCODE"
 }
 $resolvedBinary = Resolve-Path -LiteralPath $BinaryPath
-$remoteBinary = "/tmp/web-rs.new"
+$remoteBinary = "/tmp/web.new"
 $remoteDeployScript = "/tmp/web-rs-deploy.sh"
 Write-Host "Uploading $($resolvedBinary.Path) to ${SshHost}:$remoteBinary"
 & scp $resolvedBinary.Path "${SshHost}:$remoteBinary"
@@ -20,10 +20,10 @@ if ($LASTEXITCODE -ne 0) {
 }
 $remoteScript = @'
 set -euo pipefail
-incoming="/tmp/web-rs.new"
+incoming="/tmp/web.new"
 deploy_script="/tmp/web-rs-deploy.sh"
 install_dir="/opt/web-mcp"
-install_bin="$install_dir/web-rs"
+install_bin="$install_dir/web"
 service_file="/etc/systemd/system/web-rs.service"
 new_nginx="/etc/nginx/snippets/web-rs.locations.conf"
 service_user="webrs"
@@ -48,7 +48,7 @@ Type=simple
 User=webrs
 Group=webrs
 WorkingDirectory=/opt/web-mcp
-ExecStart=/opt/web-mcp/web-rs --transport http
+ExecStart=/opt/web-mcp/web mcp --transport http
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true

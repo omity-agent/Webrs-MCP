@@ -1,7 +1,7 @@
 use super::oneshot::{Invocation, OutputFormat, SingleRequest};
 use crate::{
     config::{ToolKind, ToolNames},
-    models::{FindRequest, OpenRequest, SearchCategory, SearchQueryRequest},
+    models::{OpenRequest, SearchCategory, SearchQueryRequest},
 };
 use clap::{ArgMatches, Args, Command, FromArgMatches as _};
 #[derive(Args)]
@@ -16,7 +16,7 @@ struct Presentation {
 }
 #[derive(Args)]
 struct SearchInput {
-    # [arg (long , value_parser = clap :: builder :: NonEmptyStringValueParser :: new ())]
+    #[arg(value_name = "QUERY", value_parser = clap::builder::NonEmptyStringValueParser::new())]
     q: String,
     # [arg (long , value_parser = clap :: value_parser ! (u64) . range (1 ..))]
     recency: Option<u64>,
@@ -29,42 +29,26 @@ struct SearchInput {
 }
 #[derive(Args)]
 struct OpenInput {
-    # [arg (long , value_parser = clap :: builder :: NonEmptyStringValueParser :: new ())]
+    #[arg(value_name = "URL", value_parser = clap::builder::NonEmptyStringValueParser::new())]
     url: String,
     #[arg(long, default_value_t = 0)]
     chunk: usize,
     #[command(flatten)]
     presentation: Presentation,
 }
-#[derive(Args)]
-struct FindInput {
-    # [arg (long , value_parser = clap :: builder :: NonEmptyStringValueParser :: new ())]
-    url: String,
-    # [arg (long , allow_hyphen_values = true , value_parser = clap :: builder :: NonEmptyStringValueParser :: new ())]
-    pattern: String,
-    # [arg (long , value_parser = clap :: builder :: RangedU64ValueParser ::< usize >:: new () . range (1 ..))]
-    snippet_tokens: Option<usize>,
-    #[command(flatten)]
-    presentation: Presentation,
-}
-pub(super) fn definitions(names: &ToolNames) -> [Command; 3] {
+pub(super) fn definitions(names: &ToolNames) -> [Command; 2] {
     [
         SearchInput::augment_args(
             Command::new(names.search_query.clone()).about("Search with one query"),
         ),
         OpenInput::augment_args(Command::new(names.open.clone()).about("Open one page chunk")),
-        FindInput::augment_args(
-            Command::new(names.find.clone()).about("Find a pattern in one page"),
-        ),
     ]
 }
 pub(super) fn invocation(
     names: &ToolNames,
-    matches: &ArgMatches,
-) -> Result<Option<Invocation>, clap::Error> {
-    let Some((name, arguments)) = matches.subcommand() else {
-        return Ok(None);
-    };
+    name: &str,
+    arguments: &ArgMatches,
+) -> Result<Invocation, clap::Error> {
     let invocation = match names.resolve(name) {
         Some(ToolKind::Search) => {
             let input = SearchInput::from_arg_matches(arguments)?;
@@ -88,23 +72,12 @@ pub(super) fn invocation(
                 format: input.presentation.format,
             }
         }
-        Some(ToolKind::Find) => {
-            let input = FindInput::from_arg_matches(arguments)?;
-            Invocation {
-                request: SingleRequest::Find(FindRequest {
-                    url: input.url,
-                    pattern: input.pattern,
-                    snippet_tokens: input.snippet_tokens,
-                }),
-                format: input.presentation.format,
-            }
-        }
-        None => {
+        Some(ToolKind::Find) | None => {
             return Err(clap::Error::raw(
                 clap::error::ErrorKind::InvalidSubcommand,
                 format!("Unknown tool: {name}"),
             ));
         }
     };
-    Ok(Some(invocation))
+    Ok(invocation)
 }

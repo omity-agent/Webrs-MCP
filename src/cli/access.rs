@@ -1,48 +1,48 @@
-use super::Cli;
 use crate::{
-    Result, error::AppError, mcp::tools::ToolCredentials, page::reader::ReaderCredentials,
-    search::SearchCredentials,
+    Result, config::EnvironmentConfig, error::AppError, mcp::tools::ToolCredentials,
+    page::reader::ReaderCredentials, search::SearchCredentials,
 };
-pub(super) fn credentials(cli: &Cli) -> Result<ToolCredentials> {
-    let reader = match (cli.jina.as_deref(), cli.tinyfish.as_deref()) {
+pub(super) fn credentials(config: &EnvironmentConfig) -> Result<ToolCredentials> {
+    let jina = api_key(&config.jina)?;
+    let tinyfish = api_key(&config.tinyfish)?;
+    let reader = match (jina, tinyfish) {
         (Some(_jina), Some(_tinyfish)) => {
-            return Err(AppError::config(
-                "Provide at most one remote reader API key: --jina-api-key or --tinyfish-api-key.",
-            ));
+            return Err(AppError::config(format!(
+                "Set at most one remote reader API key environment variable: {} or {}.",
+                config.jina, config.tinyfish
+            )));
         }
-        (Some(key), None) => Some(ReaderCredentials::Jina(key.to_owned())),
-        (None, Some(key)) => Some(ReaderCredentials::TinyFish(key.to_owned())),
+        (Some(key), None) => Some(ReaderCredentials::Jina(key)),
+        (None, Some(key)) => Some(ReaderCredentials::TinyFish(key)),
         (None, None) => None,
     };
-    if cli
-        .jina
-        .as_deref()
-        .or(cli.tinyfish.as_deref())
-        .is_some_and(|key| key.trim().is_empty())
-    {
-        return Err(AppError::config("Remote reader API key must not be empty."));
-    }
     Ok(ToolCredentials {
-        search: search_credentials(cli)?,
+        search: search_credentials(config)?,
         reader,
     })
 }
-fn search_credentials(cli: &Cli) -> Result<Option<SearchCredentials>> {
-    let selected = match (cli.exa.as_deref(), cli.octen.as_deref()) {
-        (Some(_exa), Some(_octen)) => {
-            return Err(AppError::config(
-                "Provide at most one search API key: --exa-api-key or --octen-api-key, not both.",
-            ));
-        }
-        (Some(key), None) => Some(SearchCredentials::Exa(key.to_owned())),
-        (None, Some(key)) => Some(SearchCredentials::Octen(key.to_owned())),
-        (None, None) => None,
-    };
-    if selected
-        .as_ref()
-        .is_some_and(|credentials| credentials.api_key().trim().is_empty())
-    {
-        return Err(AppError::config("Search API key must not be empty."));
+fn search_credentials(config: &EnvironmentConfig) -> Result<Option<SearchCredentials>> {
+    let exa = api_key(&config.exa)?;
+    let octen = api_key(&config.octen)?;
+    match (exa, octen) {
+        (Some(_exa), Some(_octen)) => Err(AppError::config(format!(
+            "Set at most one search API key: {} or {}.",
+            config.exa, config.octen
+        ))),
+        (Some(key), None) => Ok(Some(SearchCredentials::Exa(key))),
+        (None, Some(key)) => Ok(Some(SearchCredentials::Octen(key))),
+        (None, None) => Ok(None),
     }
-    Ok(selected)
+}
+fn api_key(name: &str) -> Result<Option<String>> {
+    match std::env::var(name) {
+        Ok(key) if key.trim().is_empty() => Err(AppError::config(format!(
+            "API key {name} must not be empty."
+        ))),
+        Ok(key) => Ok(Some(key)),
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Err(std::env::VarError::NotUnicode(_)) => Err(AppError::config(format!(
+            "API key {name} is not valid Unicode."
+        ))),
+    }
 }

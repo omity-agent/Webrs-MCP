@@ -107,6 +107,7 @@ pub struct AppConfig {
     pub tools: crate::config::ToolNames,
     pub protocol: crate::config::ProtocolConfig,
     pub headers: HeaderConfig,
+    pub environment: crate::config::EnvironmentConfig,
     pub search: crate::config::SearchConfig,
     pub http: HttpConfig,
     pub jina: JinaConfig,
@@ -120,6 +121,7 @@ impl AppConfig {
     #[inline]
     pub fn validate(&self) -> Result<()> {
         self.tools.validate()?;
+        self.environment.validate()?;
         self.search.validate()?;
         validation::positive(&self.chunking.chunk_tokens, "chunking.chunk_tokens")?;
         validation::concurrency_limit(

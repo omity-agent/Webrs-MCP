@@ -3,7 +3,10 @@ use crate::{
     listener::LocalServer,
     process::{PAGE, Process, renamed_settings, settings_file},
 };
-use axum::{Router, routing::get};
+use axum::{
+    Json, Router,
+    routing::{get, post},
+};
 use rmcp::serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 #[tokio::test]
@@ -104,6 +107,37 @@ fn tool_names(reply: &Value) -> Vec<&str> {
         .iter()
         .map(|tool| tool.get("name").unwrap().as_str().unwrap())
         .collect()
+}
+#[tokio::test]
+async fn stdio_mcp_search_uses_environment_credentials() {
+    let server = LocalServer::start(
+        Router::new().route("/api", post(|| async { Json(json!({ "results": [] })) })),
+    )
+    .await;
+    let mut settings = server.settings();
+    settings.tools = renamed_settings().tools;
+    let file = settings_file(&settings);
+    let mut process = Process::start_with_env(&file, "response", &[("EXA_API_KEY", "stdio-key")]);
+    let reply = process
+        .call(&request(
+            STATELESS,
+            "tools/call",
+            json!({ "name": "lookup", "arguments": { "requests": [{ "q": "test" }] } }),
+        ))
+        .await;
+    assert_eq!(
+        reply.pointer("/result/isError"),
+        Some(&json!(false)),
+        "{reply}"
+    );
+    let visits = server.visits.lock().await;
+    assert_eq!(visits.len(), 1);
+    assert_eq!(
+        visits.first().unwrap().headers.get("x-api-key").unwrap(),
+        "stdio-key"
+    );
+    drop(visits);
+    process.close().await;
 }
 fn output_path(reply: &Value, root: &Path) -> PathBuf {
     let result = reply.pointer("/result/structuredContent").unwrap();

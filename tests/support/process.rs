@@ -28,14 +28,35 @@ pub(crate) fn settings_file(settings: &AppConfig) -> NamedTempFile {
     file
 }
 fn binary() -> Command {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_web-rs"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_web"));
     command.env_remove("RUST_LOG").kill_on_drop(true);
+    let environment = config::load_embedded().unwrap().environment;
+    for name in [
+        environment.exa,
+        environment.octen,
+        environment.jina,
+        environment.tinyfish,
+    ] {
+        command.env_remove(name);
+    }
     command
 }
 pub(crate) async fn invoke(path: &std::path::Path, arguments: &[&str]) -> Output {
+    invoke_with_env(path, arguments, &[]).await
+}
+pub(crate) async fn invoke_with_env(
+    path: &std::path::Path,
+    arguments: &[&str],
+    environment: &[(&str, &str)],
+) -> Output {
     timeout(
         Duration::from_secs(20),
-        binary().arg("--config").arg(path).args(arguments).output(),
+        binary()
+            .arg("--config")
+            .arg(path)
+            .args(arguments)
+            .envs(environment.iter().copied())
+            .output(),
     )
     .await
     .unwrap()
@@ -52,6 +73,18 @@ pub(crate) fn assert_success(output: &Output) {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+pub(crate) fn start_http(file: &NamedTempFile, environment: &[(&str, &str)]) -> Child {
+    binary()
+        .arg("--config")
+        .arg(file.path())
+        .arg("mcp")
+        .envs(environment.iter().copied())
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .unwrap()
+}
 pub(crate) struct Process {
     child: Child,
     input: ChildStdin,
@@ -59,10 +92,14 @@ pub(crate) struct Process {
 }
 impl Process {
     pub fn start(file: &NamedTempFile, mode: &str) -> Self {
+        Self::start_with_env(file, mode, &[])
+    }
+    pub fn start_with_env(file: &NamedTempFile, mode: &str, environment: &[(&str, &str)]) -> Self {
         let mut child = binary()
             .arg("--config")
             .arg(file.path())
-            .args(["--transport", "stdio", "--mode", mode])
+            .args(["mcp", "--transport", "stdio", "--mode", mode])
+            .envs(environment.iter().copied())
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())

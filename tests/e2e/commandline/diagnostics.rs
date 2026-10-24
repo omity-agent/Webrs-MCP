@@ -11,45 +11,19 @@ async fn invalid_cli_input_exits_without_success_output_or_network_io() {
     let file = settings_file(&renamed_settings());
     let url = format!("{}/page", server.address);
     for (arguments, expected) in [
-        (vec!["lookup", "--q", "test"], "API key"),
+        (vec!["lookup"], "QUERY"),
+        (vec!["browse"], "URL"),
+        (vec!["lookup", ""], "value"),
+        (vec!["browse", ""], "value"),
+        (vec!["lookup", "one", "two"], "two"),
+        (vec!["browse", &url, "--chunk=-1"], "--chunk"),
+        (vec!["lookup", "test", "--recency", "0"], "--recency"),
+        (vec!["browse", &url, "--mode", "filesystem"], "--mode"),
         (
-            vec![
-                "lookup",
-                "--q",
-                "test",
-                "--exa-api-key",
-                "exa",
-                "--octen-api-key",
-                "octen",
-            ],
-            "API key",
+            vec!["lookup", "test", "--transport", "stdio"],
+            "--transport",
         ),
-        (
-            vec!["lookup", "--q", "test", "--exa-api-key", " "],
-            "API key",
-        ),
-        (vec!["lookup", "--q", "one", "--q", "two"], "--q"),
-        (
-            vec![
-                "browse",
-                "--url",
-                &url,
-                "--jina-api-key",
-                "jina",
-                "--tinyfish-api-key",
-                "tinyfish",
-            ],
-            "API key",
-        ),
-        (vec!["browse", "--url", &url, "--chunk=-1"], "--chunk"),
-        (
-            vec!["--mode", "filesystem", "browse", "--url", &url],
-            "--mode",
-        ),
-        (
-            vec!["scan", "--url", &url, "--pattern", "[", "--format", "json"],
-            "pattern",
-        ),
+        (vec!["mcp", "--mode", "filesystem"], "stdio"),
     ] {
         let output = invoke(file.path(), &arguments).await;
         assert!(!output.status.success(), "{arguments:?}");
@@ -64,12 +38,74 @@ async fn invalid_cli_input_exits_without_success_output_or_network_io() {
     assert!(server.visits.lock().await.is_empty());
 }
 #[tokio::test]
+async fn root_requires_a_command_and_help_exposes_only_mcp_search_and_open() {
+    let file = settings_file(&renamed_settings());
+    let executable = std::path::Path::new(env!("CARGO_BIN_EXE_web"))
+        .file_name()
+        .unwrap()
+        .to_str()
+        .unwrap();
+    for arguments in [vec![], vec!["--help"]] {
+        let output = invoke(file.path(), &arguments).await;
+        assert_eq!(output.status.success(), !arguments.is_empty());
+        let text = format!(
+            "{}{}",
+            stdout(&output),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(text.contains(&format!("Usage: {executable} ")), "{text}");
+        if arguments.is_empty() {
+            assert!(text.contains("requires a subcommand"), "{text}");
+            continue;
+        }
+        for name in ["mcp", "lookup", "browse"] {
+            assert!(
+                text.lines()
+                    .any(|line| line.trim_start().starts_with(&format!("{name} "))),
+                "{text}"
+            );
+        }
+        assert!(
+            !text
+                .lines()
+                .any(|line| line.trim_start().starts_with("scan ")),
+            "{text}"
+        );
+        for variable in [
+            "EXA_API_KEY",
+            "OCTEN_API_KEY",
+            "JINA_API_KEY",
+            "TINYFISH_API_KEY",
+        ] {
+            assert!(text.contains(variable), "{text}");
+        }
+    }
+    for (name, positional) in [
+        ("lookup", "<QUERY>"),
+        ("browse", "<URL>"),
+        ("mcp", "--transport"),
+    ] {
+        let output = invoke(file.path(), &[name, "--help"]).await;
+        assert!(output.status.success(), "{output:?}");
+        assert!(stdout(&output).contains(positional), "{output:?}");
+    }
+}
+#[tokio::test]
 async fn configuration_errors_stop_startup_even_when_only_help_is_requested() {
     let directory = tempfile::tempdir().unwrap();
     let missing = invoke(&directory.path().join("missing.yaml"), &["--help"]).await;
     assert!(!missing.status.success() && missing.stdout.is_empty());
     assert_ne!(missing.stderr.as_slice(), b"");
-    for name in ["", "has space", "-flag", "a/b", "help", "工具", "lookup"] {
+    for name in [
+        "",
+        "has space",
+        "-flag",
+        "a/b",
+        "help",
+        "mcp",
+        "工具",
+        "lookup",
+    ] {
         let mut settings = renamed_settings();
         settings.tools.open = name.to_owned();
         let file = settings_file(&settings);
@@ -106,7 +142,7 @@ async fn failed_page_commands_return_formatted_failure_and_nonzero_exit_status()
     let file = settings_file(&renamed_settings());
     let url = format!("{}/missing", server.address);
     for format in ["xml", "json"] {
-        let output = invoke(file.path(), &["browse", "--url", &url, "--format", format]).await;
+        let output = invoke(file.path(), &["browse", &url, "--format", format]).await;
         assert!(!output.status.success() && !output.stderr.is_empty());
         if format == "json" {
             let reply: Value = sonic_rs::from_str(stdout(&output)).unwrap();

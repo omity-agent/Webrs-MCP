@@ -1,6 +1,6 @@
 use crate::{
     Result,
-    cli::{RuntimeOptions, Transport, WorkMode, oneshot::Invocation},
+    cli::{McpOptions, RuntimeCommand, RuntimeOptions, Transport, WorkMode, oneshot::Invocation},
     config::AppConfig,
     error::AppError,
     mcp::{self, handler::health, http_service, tools::ToolCredentials},
@@ -19,12 +19,18 @@ const HEALTH_PATH: &str = "/health";
 )]
 pub async fn run(config: AppConfig, options: RuntimeOptions) -> anyhow::Result<()> {
     options.validate().map_err(anyhow::Error::from)?;
-    if let Some(invocation) = options.invocation {
-        return run_command(config, options.credentials, invocation).await;
-    }
-    match options.transport {
-        Transport::Http => run_http(config).await,
-        Transport::Stdio => run_stdio(config, options.mode, options.credentials).await,
+    match options.command {
+        RuntimeCommand::Tool(invocation) => {
+            run_command(config, options.credentials, invocation).await
+        }
+        RuntimeCommand::Mcp(McpOptions {
+            transport: Transport::Http,
+            mode: _,
+        }) => run_http(config).await,
+        RuntimeCommand::Mcp(McpOptions {
+            transport: Transport::Stdio,
+            mode,
+        }) => run_stdio(config, mode, options.credentials).await,
     }
 }
 async fn run_command(

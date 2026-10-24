@@ -10,7 +10,7 @@ async fn main() -> anyhow::Result<()> {
         .map_or_else(config::load_embedded, config::load)
         .context("failed to load configuration")?;
     let options = Cli::from_env(&app_config)
-        .runtime_options()
+        .runtime_options(&app_config)
         .context("failed to parse command line")?;
     install_tracing(&app_config.server.log_level)?;
     app::run(app_config, options)

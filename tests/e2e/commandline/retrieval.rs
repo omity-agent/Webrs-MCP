@@ -1,11 +1,16 @@
 use crate::{
     listener::LocalServer,
-    process::{PAGE, assert_success, invoke, renamed_settings, settings_file, stdout},
+    process::{
+        PAGE, assert_success, invoke, invoke_with_env, renamed_settings, settings_file, stdout,
+    },
 };
-use axum::{Router, routing::get};
+use axum::{
+    Json, Router,
+    routing::{get, post},
+};
 use rmcp::serde_json::{Value, json};
 #[tokio::test]
-async fn configured_open_and_find_deliver_real_local_content_with_chunk_and_regex_parameters() {
+async fn configured_open_delivers_real_local_content_with_a_positional_url_and_chunk_parameter() {
     let server = LocalServer::start(Router::new().route(
         "/page",
         get(|| async { ([("content-type", "text/markdown")], PAGE) }),
@@ -15,7 +20,7 @@ async fn configured_open_and_find_deliver_real_local_content_with_chunk_and_rege
     let url = format!("{}/page", server.address);
     let opened = invoke(
         file.path(),
-        &["browse", "--url", &url, "--chunk", "99", "--format", "json"],
+        &["browse", &url, "--chunk", "99", "--format", "json"],
     )
     .await;
     assert_success(&opened);
@@ -40,25 +45,6 @@ async fn configured_open_and_find_deliver_real_local_content_with_chunk_and_rege
             .unwrap()
             .contains("using 0")
     );
-    let found = invoke(
-        file.path(),
-        &[
-            "scan",
-            "--url",
-            &url,
-            "--pattern",
-            "nee[d]le(?= is)",
-            "--snippet-tokens",
-            "20",
-        ],
-    )
-    .await;
-    assert_success(&found);
-    let text = stdout(&found);
-    assert!(text.starts_with("<0>\n<TOTAL_CHUNKS>\n1\n</TOTAL_CHUNKS>\n<MATCHES>\n<0>\n"));
-    assert!(text.contains("<CHUNK>\n0\n</CHUNK>"));
-    assert!(text.contains("<SNIPPET>") && text.contains("needle is here"));
-    assert!(text.ends_with("</SNIPPET>\n</0>\n</MATCHES>\n</0>\n"));
     assert_eq!(
         server
             .visits
@@ -67,7 +53,7 @@ async fn configured_open_and_find_deliver_real_local_content_with_chunk_and_rege
             .iter()
             .filter(|visit| visit.uri == "/page")
             .count(),
-        4
+        2
     );
     assert!(
         server
@@ -77,4 +63,56 @@ async fn configured_open_and_find_deliver_real_local_content_with_chunk_and_rege
             .iter()
             .all(|visit| !visit.headers.contains_key("range"))
     );
+}
+#[tokio::test]
+async fn remote_readers_use_api_keys_from_environment_variables() {
+    let server = LocalServer::start(
+        Router::new()
+            .route(
+                "/jina",
+                post(|| async { Json(json!({ "data": { "content": PAGE } })) }),
+            )
+            .route(
+                "/tinyfish",
+                post(|Json(body): Json<Value>| async move {
+                    Json(json!({
+                        "results": [{ "url": body.pointer("/urls/0").unwrap(), "text": PAGE }],
+                        "errors": []
+                    }))
+                }),
+            ),
+    )
+    .await;
+    let mut settings = server.settings();
+    settings.tools = renamed_settings().tools;
+    settings.jina.endpoint = format!("{}/jina", server.address);
+    settings.tinyfish.endpoint = format!("{}/tinyfish", server.address);
+    let file = settings_file(&settings);
+    let url = format!("{}/missing", server.address);
+    for (variable, route, header, expected) in [
+        (
+            "JINA_API_KEY",
+            "/jina",
+            "authorization",
+            "Bearer reader-key",
+        ),
+        ("TINYFISH_API_KEY", "/tinyfish", "x-api-key", "reader-key"),
+    ] {
+        let output = invoke_with_env(
+            file.path(),
+            &["browse", &url, "--format", "json"],
+            &[(variable, "reader-key")],
+        )
+        .await;
+        assert_success(&output);
+        let response: Value = sonic_rs::from_str(stdout(&output)).unwrap();
+        assert_eq!(
+            response.pointer("/results/0/page/content"),
+            Some(&json!(PAGE))
+        );
+        let visits = server.visits.lock().await;
+        let request = visits.iter().find(|visit| visit.uri == route).unwrap();
+        assert_eq!(request.headers.get(header).unwrap(), expected);
+        drop(visits);
+    }
 }

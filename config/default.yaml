@@ -9,9 +9,9 @@ server:
   allowed_hosts: [] # Host header allow-list; empty accepts every Host header.
   allowed_origins: [] # Optional browser Origin allow-list; empty disables Origin checks.
 
-# Tool names shared by MCP registration, dispatch, and CLI subcommands.
+# Tool names shared by MCP registration and dispatch; CLI exposes search and open.
 tools:
-  search_query: search_query # Search tool name; distinct from the other tool names.
+  search_query: search_query # Search tool name; distinct from other tools and the reserved mcp command.
   open: open # Page-opening tool name.
   find: find # Page-searching tool name.
 
@@ -27,6 +27,14 @@ headers:
   octen_api_key: x-octen-api-key # Octen API key header; mutually exclusive with Exa.
   jina_api_key: x-jina-api-key # Jina API key header.
   tinyfish_api_key: x-tinyfish-api-key # TinyFish Fetch API key header.
+
+# API key environment variable names for CLI commands and stdio MCP.
+# HTTP MCP continues to accept keys only through request headers.
+environment:
+  exa: EXA_API_KEY # Set Exa or Octen, not both.
+  octen: OCTEN_API_KEY # Alternative search provider.
+  jina: JINA_API_KEY # Set at most one remote reader.
+  tinyfish: TINYFISH_API_KEY # Alternative remote reader.
 
 # Search behavior; the supplied API key selects exactly one backend.
 search:
