@@ -1,3 +1,4 @@
+use crate::assertions::JsonProbe as _;
 use crate::{
     envelope::{STATELESS, request},
     listener::LocalServer,
@@ -55,46 +56,62 @@ async fn http_mcp_requires_request_headers_even_when_environment_keys_are_presen
     })
     .await
     .unwrap();
-    let listed: Value = client
-        .post(format!("{address}/mcp"))
-        .header("accept", "application/json, text/event-stream")
-        .header("mcp-protocol-version", STATELESS)
-        .header("mcp-method", "tools/list")
-        .json(&request(STATELESS, "tools/list", json!({})))
-        .send()
-        .await
-        .unwrap()
-        .json()
-        .await
-        .unwrap();
-    let schema = sonic_rs::to_string(listed.pointer("/result/tools").unwrap()).unwrap();
-    assert!(!schema.contains("\"chunk\"") && !schema.contains("\"total_chunks\""));
-    let body = request(
-        STATELESS,
-        "tools/call",
-        json!({ "name": "lookup", "arguments": { "requests": [{ "q": "test" }] } }),
-    );
-    for key in [None, Some("request-key")] {
+    for (name, headers, failed) in [
+        ("lookup", vec![], true),
+        ("lookup", vec![("x-exa-api-key", "request-key")], false),
+        ("lookup", vec![("x-exa-api-key", "")], true),
+        (
+            "lookup",
+            vec![("x-exa-api-key", "one"), ("x-exa-api-key", "two")],
+            true,
+        ),
+        (
+            "lookup",
+            vec![("x-exa-api-key", "exa"), ("x-octen-api-key", "octen")],
+            true,
+        ),
+        ("browse", vec![("x-jina-api-key", "")], true),
+        (
+            "browse",
+            vec![("x-tinyfish-api-key", "one"), ("x-tinyfish-api-key", "two")],
+            true,
+        ),
+        (
+            "browse",
+            vec![
+                ("x-jina-api-key", "jina"),
+                ("x-tinyfish-api-key", "tinyfish"),
+            ],
+            true,
+        ),
+    ] {
+        let arguments = if name == "lookup" {
+            json!({"requests": [{"q": "test"}]})
+        } else {
+            json!({"requests": [{"url": "https://example.org/", "chunk": 0_u64}]})
+        };
+        let body = request(
+            STATELESS,
+            "tools/call",
+            json!({"name": name, "arguments": arguments}),
+        );
         let mut builder = client
             .post(format!("{address}/mcp"))
             .header("accept", "application/json, text/event-stream")
             .header("mcp-protocol-version", STATELESS)
             .header("mcp-method", "tools/call")
-            .header("mcp-name", "lookup")
+            .header("mcp-name", name)
             .json(&body);
-        if let Some(value) = key {
-            builder = builder.header("x-exa-api-key", value);
+        for (header, value) in headers {
+            builder = builder.header(header, value);
         }
         let response = builder.send().await.unwrap();
         assert!(response.status().is_success(), "{response:?}");
         let text = response.text().await.unwrap();
         let reply: Value = sonic_rs::from_str(&text).unwrap();
-        assert_eq!(
-            reply.pointer("/result/isError"),
-            Some(&json!(key.is_none())),
-            "{reply}"
-        );
+        assert_eq!(reply.at("/result/isError"), &json!(failed), "{reply}");
     }
+    assert_eq!(upstream.uris().await.len(), 1);
     let visits = upstream.visits.lock().await;
     assert_eq!(visits.len(), 1);
     assert_eq!(

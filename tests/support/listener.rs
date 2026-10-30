@@ -19,6 +19,14 @@ pub(crate) struct LocalServer {
     pub task: JoinHandle<()>,
 }
 impl LocalServer {
+    pub async fn uris(&self) -> Vec<String> {
+        self.visits
+            .lock()
+            .await
+            .iter()
+            .map(|visit| visit.uri.clone())
+            .collect()
+    }
     pub async fn start(router: Router) -> Self {
         let visits = Arc::new(Mutex::new(Vec::new()));
         let observed = router.layer(middleware::from_fn_with_state(Arc::clone(&visits), record));

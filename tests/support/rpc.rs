@@ -1,13 +1,28 @@
-use crate::{envelope::STATELESS, listener::LocalServer};
+use crate::{
+    envelope::{STATELESS, request},
+    listener::LocalServer,
+};
 use core::time::Duration;
 use reqwest::{Client, RequestBuilder, StatusCode};
-use rmcp::serde_json::Value;
+use rmcp::serde_json::{Value, json};
 use web_rs::{app, config::AppConfig};
 pub(crate) struct Endpoint {
     pub server: LocalServer,
     pub client: Client,
 }
 impl Endpoint {
+    pub fn tool(&self, name: &str, arguments: &Value) -> RequestBuilder {
+        self.post(
+            &request(
+                STATELESS,
+                "tools/call",
+                json!({
+                "name": name, "arguments": arguments
+                    }),
+            ),
+            STATELESS,
+        )
+    }
     pub async fn configured(settings: AppConfig) -> Self {
         Self::listen(app::router(settings).unwrap()).await
     }

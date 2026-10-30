@@ -24,7 +24,7 @@ impl ToolOutput {
     }
     pub(crate) fn formatted(&self, format: OutputFormat) -> Result<String> {
         match format {
-            OutputFormat::Xml => Ok(self.standard_text()),
+            OutputFormat::Agent => Ok(self.standard_text()),
             OutputFormat::Json => sonic_rs::to_string(self).map_err(|error| {
                 AppError::internal(format!("failed to encode tool response: {error}"))
             }),

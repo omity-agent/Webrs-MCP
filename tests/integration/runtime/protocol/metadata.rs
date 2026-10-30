@@ -1,3 +1,4 @@
+use crate::assertions::JsonProbe as _;
 use crate::{
     envelope::{HANDSHAKE, STATELESS, request},
     rpc::{Endpoint, response},
@@ -26,7 +27,7 @@ async fn stateless_requests_require_metadata_and_matching_routing_headers() {
                 .remove(missing);
         }
         let reply = response(endpoint.post(&body, STATELESS), StatusCode::BAD_REQUEST).await;
-        assert_eq!(reply.pointer("/error/code"), Some(&json!(-32602_i64)));
+        assert_eq!(reply.at("/error/code"), &json!(-32602_i64));
         assert!(reply.get("result").is_none());
     }
     let call = request(
@@ -51,11 +52,7 @@ async fn stateless_requests_require_metadata_and_matching_routing_headers() {
         let reply = endpoint.client.execute(built).await.unwrap();
         assert_eq!(reply.status(), StatusCode::BAD_REQUEST);
         let body: Value = reply.json().await.unwrap();
-        assert_eq!(
-            body.pointer("/error/code"),
-            Some(&json!(-32020_i64)),
-            "{body}"
-        );
+        assert_eq!(body.at("/error/code"), &json!(-32020_i64), "{body}");
         assert!(body.get("result").is_none());
     }
 }
@@ -74,14 +71,11 @@ async fn unsupported_protocol_reports_supported_revisions_and_http_methods_are_p
         StatusCode::BAD_REQUEST,
     )
     .await;
-    assert_eq!(reply.pointer("/error/code"), Some(&json!(-32022_i64)));
+    assert_eq!(reply.at("/error/code"), &json!(-32022_i64));
+    assert_eq!(reply.at("/error/data/requested"), &json!(unknown));
     assert_eq!(
-        reply.pointer("/error/data/requested"),
-        Some(&json!(unknown))
-    );
-    assert_eq!(
-        reply.pointer("/error/data/supported"),
-        Some(&json!([HANDSHAKE, STATELESS]))
+        reply.at("/error/data/supported"),
+        &json!([HANDSHAKE, STATELESS])
     );
     for method in [reqwest::Method::GET, reqwest::Method::DELETE] {
         let response = endpoint

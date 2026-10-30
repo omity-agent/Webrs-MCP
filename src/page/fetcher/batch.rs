@@ -70,10 +70,11 @@ impl PageFetcher {
             .reader
             .read_markdown_many(&missing_urls, credentials)
             .await;
-        merge_reader_pages(direct_pages, missing_urls, reader_results)
+        merge_reader_pages(self, direct_pages, missing_urls, reader_results)
     }
 }
 fn merge_reader_pages(
+    fetcher: &PageFetcher,
     direct_pages: Vec<Result<Option<PageContent>>>,
     missing_urls: Vec<String>,
     reader_results: Result<Vec<Result<String>>>,
@@ -83,11 +84,8 @@ fn merge_reader_pages(
         .into_iter()
         .zip(ordered_results)
         .map(|(url, result)| {
-            result.map(|markdown| PageContent {
-                url,
-                source: PageSource::Reader,
-                markdown: markdown.into(),
-            })
+            let markdown = result?;
+            fetcher.page_content(&url, &url, PageSource::Reader, &markdown)
         });
     direct_pages
         .into_iter()

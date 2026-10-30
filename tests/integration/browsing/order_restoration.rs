@@ -1,3 +1,4 @@
+use crate::assertions::JsonProbe as _;
 use crate::listener::LocalServer;
 use alloc::sync::Arc;
 use axum::{
@@ -15,7 +16,7 @@ async fn partial_reader(
     State(calls): State<Arc<Mutex<Vec<Value>>>>,
     Json(body): Json<Value>,
 ) -> Json<Value> {
-    let urls = body.get("urls").unwrap().as_array().unwrap();
+    let urls = body.list("/urls");
     let good = urls
         .iter()
         .find(|url| url.as_str().unwrap().ends_with("/b"))
@@ -79,17 +80,13 @@ async fn page_batch_deduplicates_io_and_preserves_direct_success_reader_failure_
     let captured = calls.lock().await;
     assert_eq!(captured.len(), 1);
     let reader_urls = ["b", "blocked", "missing"].map(|path| format!("{}/{path}", server.address));
-    assert_eq!(
-        captured.first().unwrap().get("urls"),
-        Some(&json!(reader_urls))
-    );
+    assert_eq!(captured.first().unwrap().at("/urls"), &json!(reader_urls));
     assert_eq!(
         server
-            .visits
-            .lock()
+            .uris()
             .await
             .iter()
-            .filter(|visit| visit.uri == "/direct")
+            .filter(|uri| *uri == "/direct")
             .count(),
         2
     );

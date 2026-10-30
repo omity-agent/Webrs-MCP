@@ -10,7 +10,7 @@ use sonic_rs::Value;
 #[non_exhaustive]
 pub enum OutputFormat {
     #[default]
-    Xml,
+    Agent,
     Json,
 }
 #[derive(Clone, Debug)]

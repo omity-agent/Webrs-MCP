@@ -1,3 +1,4 @@
+use crate::assertions::JsonProbe as _;
 use crate::upstream::{Upstream, query};
 use rmcp::serde_json::json;
 use web_rs::{models::SearchCategory, search::SearchCredentials};
@@ -22,18 +23,14 @@ async fn octen_maps_filters_results_and_warnings() {
     assert_eq!(result.title.as_deref(), Some("Page"));
     assert_eq!(result.date.as_deref(), Some("2026-01-01T00:00:00Z"));
     assert_eq!(result.highlight, "Useful\n\ntext");
-    assert!(
-        batch
-            .warnings
-            .iter()
-            .any(|warning| warning.contains("category"))
-    );
-    assert!(
-        batch
-            .warnings
-            .iter()
-            .any(|warning| warning.contains("Partial coverage"))
-    );
+    for fragment in ["category", "Partial coverage"] {
+        assert!(
+            batch
+                .warnings
+                .iter()
+                .any(|warning| warning.contains(fragment))
+        );
+    }
     let captured = upstream.requests.lock().await.first().unwrap().clone();
     assert_eq!(captured.headers.get("x-api-key").unwrap(), "octen-key");
     assert!(captured.headers.get("exa-beta").is_none());
@@ -53,10 +50,7 @@ async fn octen_maps_filters_results_and_warnings() {
         assert_eq!(captured.body.pointer(path), Some(&value));
     }
     assert!(captured.body.get("category").is_none());
-    let since = chrono::DateTime::parse_from_rfc3339(
-        captured.body.get("start_time").unwrap().as_str().unwrap(),
-    )
-    .unwrap();
+    let since = chrono::DateTime::parse_from_rfc3339(captured.body.text("/start_time")).unwrap();
     let after = chrono::Utc::now() - chrono::Days::new(7);
     assert!((before.timestamp()..=after.timestamp()).contains(&since.timestamp()));
 }
@@ -78,13 +72,22 @@ async fn exa_requests_dynamic_highlights_and_preserves_result_contract() {
         ]
     }))
     .await;
-    let client = upstream.search_client();
+    let mut settings = upstream.server.settings();
+    settings.search.exa.dynamic_highlights_beta = "configured-dynamic-highlights".to_owned();
+    let client = web_rs::search::SearchClient::new(
+        &settings,
+        web_rs::net::secure_client(&settings.http, &settings.ssrf).unwrap(),
+    );
     let mut request = query("exa");
     request.category = Some(SearchCategory::News);
     request.recency = Some(1);
     request.domains = Some(vec!["EXAMPLE.org".to_owned()]);
     let key = SearchCredentials::Exa("exa-key".to_owned());
-    let batch = client.search_many(&[request], &key, true).await.unwrap();
+    let batch = client
+        .search_many(&[request.clone(), request], &key, true)
+        .await
+        .unwrap();
+    assert_eq!(batch.groups.len(), 2);
     assert_eq!(batch.warnings, Vec::<String>::new());
     let mut results = batch.groups.first().unwrap().iter();
     assert_eq!(results.len(), 2);
@@ -98,10 +101,16 @@ async fn exa_requests_dynamic_highlights_and_preserves_result_contract() {
     assert_eq!(second.highlight, "");
     let captured = upstream.requests.lock().await.first().unwrap().clone();
     assert_eq!(captured.headers.get("x-api-key").unwrap(), "exa-key");
-    assert_eq!(
-        captured.headers.get("exa-beta").unwrap(),
-        "dynamic-highlights-2026-08-28"
-    );
+    {
+        let requests = upstream.requests.lock().await;
+        assert_eq!(requests.len(), 2);
+        for captured_request in requests.iter() {
+            assert_eq!(
+                captured_request.headers.get("exa-beta").unwrap(),
+                settings.search.exa.dynamic_highlights_beta.as_str()
+            );
+        }
+    }
     let search = upstream.server.settings().search;
     for (path, value) in [
         ("/query", json!("exa")),
@@ -120,46 +129,7 @@ async fn exa_requests_dynamic_highlights_and_preserves_result_contract() {
     ] {
         assert_eq!(captured.body.pointer(path), Some(&value));
     }
-    assert_eq!(
-        captured
-            .body
-            .get("startPublishedDate")
-            .unwrap()
-            .as_str()
-            .unwrap()
-            .len(),
-        10
-    );
-}
-#[tokio::test]
-async fn exa_sends_configured_beta_for_each_query() {
-    let upstream = Upstream::json(&json!({"results": []})).await;
-    let mut settings = upstream.server.settings();
-    settings.search.exa.dynamic_highlights_beta = "configured-dynamic-highlights".to_owned();
-    let client = web_rs::search::SearchClient::new(
-        &settings,
-        web_rs::net::secure_client(&settings.http, &settings.ssrf).unwrap(),
-    );
-    client
-        .search_many(
-            &[query("first"), query("second")],
-            &SearchCredentials::Exa("exa".to_owned()),
-            true,
-        )
-        .await
-        .unwrap();
-    let requests = upstream.requests.lock().await;
-    assert_eq!(requests.len(), 2);
-    for captured in requests.iter() {
-        assert_eq!(
-            captured.headers.get("exa-beta").unwrap(),
-            settings.search.exa.dynamic_highlights_beta.as_str()
-        );
-        assert_eq!(
-            captured.body.pointer("/contents/highlights"),
-            Some(&json!({"dynamic": true}))
-        );
-    }
+    assert_eq!(captured.body.text("/startPublishedDate").len(), 10);
 }
 #[tokio::test]
 async fn url_only_search_disables_content_for_both_backends() {

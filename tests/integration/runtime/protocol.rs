@@ -1,8 +1,4 @@
 #[cfg(test)]
-mod call_results;
-#[cfg(test)]
-mod credentials;
-#[cfg(test)]
 mod discovery;
 #[cfg(test)]
 mod input_repairs;

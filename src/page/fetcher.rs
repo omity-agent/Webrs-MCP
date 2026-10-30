@@ -1,7 +1,10 @@
 use crate::{
     Result,
     config::AppConfig,
-    direct::{DirectFetchTarget, SharedProbeFetch, fetch_direct_text, shared_probe_fetch},
+    direct::{
+        DirectFetchTarget, SharedProbeFetch, fetch_direct_text, shared_probe_fetch,
+        sites::learn::markdown_body,
+    },
     error::AppError,
     net::SecureHttpClient,
     page::reader::{PageReader, ReaderCredentials},
@@ -61,11 +64,7 @@ impl PageFetcher {
             return Err(self.missing_reader_credentials_error());
         };
         let markdown = self.reader.read_markdown(url, reader_credentials).await?;
-        Ok(PageContent {
-            url: url.to_owned(),
-            source: PageSource::Reader,
-            markdown: markdown.into(),
-        })
+        self.page_content(url, url, PageSource::Reader, &markdown)
     }
     async fn fetch_direct(&self, url: &str) -> Result<Option<PageContent>> {
         let resolved = self
@@ -99,11 +98,9 @@ impl PageFetcher {
         while let Some((request_url, result)) = attempts.next().await {
             match result {
                 Ok(markdown) => {
-                    return Ok(Some(PageContent {
-                        url: url.to_owned(),
-                        source: PageSource::Direct,
-                        markdown: markdown.into(),
-                    }));
+                    return self
+                        .page_content(url, resolved.as_str(), PageSource::Direct, &markdown)
+                        .map(Some);
                 }
                 Err(error) => errors.push((request_url, error)),
             }
@@ -116,6 +113,20 @@ impl PageFetcher {
             );
         }
         Ok(None)
+    }
+    fn page_content(
+        &self,
+        url: &str,
+        source_url: &str,
+        source: PageSource,
+        markdown: &str,
+    ) -> Result<PageContent> {
+        let body = markdown_body(source_url, markdown, &self.config.direct_fetch)?;
+        Ok(PageContent {
+            url: url.to_owned(),
+            source,
+            markdown: body.into(),
+        })
     }
     fn shared_probe_fetches(
         &self,

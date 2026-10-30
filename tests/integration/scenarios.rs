@@ -1,4 +1,6 @@
 extern crate alloc;
+#[path = "../support/assertions.rs"]
+mod assertions;
 #[cfg(test)]
 mod browsing;
 #[path = "../support/channel.rs"]

@@ -96,11 +96,10 @@ async fn redirects_and_resolution_revalidate_targets_and_enforce_hop_limits() {
     assert_eq!(unchanged.status, StatusCode::NOT_MODIFIED);
     assert!(
         server
-            .visits
-            .lock()
+            .uris()
             .await
             .iter()
-            .all(|visit| visit.uri != "/target" && visit.uri != "/")
+            .all(|uri| uri != "/target" && uri != "/")
     );
 }
 #[tokio::test]
@@ -131,14 +130,7 @@ async fn redirect_chain_uses_one_deadline_instead_of_one_timeout_per_hop() {
         .await
         .unwrap_err();
     assert!(error.client_message().contains("timed out"), "{error}");
-    assert!(
-        server
-            .visits
-            .lock()
-            .await
-            .iter()
-            .all(|visit| visit.uri != "/end")
-    );
+    assert!(server.uris().await.iter().all(|uri| uri != "/end"));
     assert_eq!(
         client
             .get(&server.address, HeaderMap::new(), 5.0)

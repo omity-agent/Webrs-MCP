@@ -1,3 +1,4 @@
+use crate::assertions::JsonProbe as _;
 use crate::{
     envelope::{STATELESS, request},
     listener::LocalServer,
@@ -28,7 +29,7 @@ async fn stdio_defaults_to_chunks_and_no_chunking_changes_schema_and_content() {
         let listed = process
             .call(&request(STATELESS, "tools/list", json!({})))
             .await;
-        let schema = sonic_rs::to_string(listed.pointer("/result/tools").unwrap()).unwrap();
+        let schema = sonic_rs::to_string(listed.at("/result/tools")).unwrap();
         for field in ["\"chunk\"", "\"total_chunks\""] {
             assert_eq!(schema.contains(field), chunking, "{listed}");
         }
@@ -44,23 +45,33 @@ async fn stdio_defaults_to_chunks_and_no_chunking_changes_schema_and_content() {
                 json!({ "name": "browse", "arguments": { "requests": [input] } }),
             ))
             .await;
-        assert_eq!(opened.pointer("/result/isError"), Some(&json!(false)));
+        assert_eq!(opened.at("/result/isError"), &json!(false));
         let page = if chunking {
             json!({ "chunk": 1_u64, "total_chunks": 5_u64, "content": " alpha".repeat(5) })
         } else {
             json!({ "content": content })
         };
         assert_eq!(
-            opened.pointer("/result/structuredContent"),
-            Some(&json!({ "results": [{ "url": url, "page": page }] }))
+            opened.at("/result/structuredContent"),
+            &json!({ "results": [{ "url": url, "page": page }] })
         );
-        let text = opened
-            .pointer("/result/content/0/text")
-            .unwrap()
-            .as_str()
-            .unwrap();
+        let text = opened.text("/result/content/0/text");
         assert_eq!(text.contains("<CHUNK>"), chunking);
         assert_eq!(text.contains("<TOTAL_CHUNKS>"), chunking);
+        if !chunking {
+            let found = process.call(&request(STATELESS, "tools/call", json!({
+                "name": "scan",
+                "arguments": {"requests": [
+                    {"url": url, "pattern": "^ alpha(?: alpha){23}$", "snippet_tokens": 100_u64}
+                ]}
+            }))).await;
+            assert_eq!(
+                found.at("/result/structuredContent/pages"),
+                &json!([
+                    {"matches": [{"snippet": content}]}
+                ])
+            );
+        }
         process.close().await;
     }
 }

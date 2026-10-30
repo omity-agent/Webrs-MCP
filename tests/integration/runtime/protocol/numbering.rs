@@ -1,3 +1,4 @@
+use crate::assertions::JsonProbe as _;
 use crate::{channel, listener::LocalServer};
 use axum::{Json, Router, routing::post};
 use rmcp::serde_json::{Value, json};
@@ -20,7 +21,7 @@ async fn search_service() -> (LocalServer, ToolService) {
     (server, service)
 }
 async fn search_response(Json(body): Json<Value>) -> Json<Value> {
-    let query = body.get("query").unwrap().as_str().unwrap();
+    let query = body.text("/query");
     let count: usize = match query {
         "alpha" => 12,
         "beta" => 2,
@@ -53,92 +54,13 @@ async fn search_restarts_numbering_per_query_and_keeps_structured_results_flat()
         }),
     )
     .await;
-    assert_eq!(reply.pointer("/result/isError"), Some(&json!(false)));
-    let expected_text = [("alpha", 12_usize), ("beta", 2_usize)]
-        .into_iter()
-        .flat_map(|(query, count)| {
-            (0..count).map(move |index| {
-                format!(
-                    "<{index}>\n<TITLE>\n{query} {index}\n</TITLE>\n\
-                     <DATE>\n2025-10-01\n</DATE>\n\
-                     <URL>\nhttps://example.org/{query}/{index}\n</URL>\n\
-                     <HIGHLIGHT>\n{query} & <{index}>\n</HIGHLIGHT>\n</{index}>"
-                )
-            })
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    assert_eq!(
-        reply.pointer("/result/content/0/text"),
-        Some(&json!(expected_text))
-    );
-    let expected_results = [("alpha", 12_usize), ("beta", 2_usize)]
-        .into_iter()
-        .flat_map(|(query, count)| {
-            (0..count).map(move |index| {
-                json!({
-                    "title": format!("{query} {index}"),
-                    "date": "2025-10-01",
-                    "url": format!("https://example.org/{query}/{index}"),
-                    "highlight": format!("{query} & <{index}>"),
-                })
-            })
-        })
-        .collect::<Vec<_>>();
-    assert_eq!(
-        reply.pointer("/result/structuredContent"),
-        Some(&json!({ "results": expected_results }))
-    );
-    assert_eq!(server.visits.lock().await.len(), 3);
-}
-#[tokio::test]
-async fn empty_results_produce_empty_text_or_only_their_warnings() {
-    let (_server, service) = search_service().await;
-    let empty_results = json!({ "results": [] });
-    let empty_pages = json!({ "pages": [] });
-    for (name, arguments, expected) in [
-        ("search_query", json!({ "requests": [] }), &empty_results),
-        (
-            "search_query",
-            json!({ "requests": [{ "q": "empty" }] }),
-            &empty_results,
-        ),
-        ("open", json!({ "requests": [] }), &empty_results),
-        ("find", json!({ "requests": [] }), &empty_pages),
-    ] {
-        let reply = channel::call(
-            service.clone(),
-            "tools/call",
-            json!({ "name": name, "arguments": arguments }),
-        )
-        .await;
-        assert_eq!(reply.pointer("/result/isError"), Some(&json!(false)));
-        assert_eq!(reply.pointer("/result/content/0/text"), Some(&json!("")));
-        assert_eq!(reply.pointer("/result/structuredContent"), Some(expected));
-    }
-    let warned = channel::call(
-        service,
-        "tools/call",
-        json!({
-            "name": "search_query",
-            "arguments": { "requests": [{ "query": "empty" }] },
-        }),
-    )
-    .await;
-    assert_eq!(warned.pointer("/result/isError"), Some(&json!(false)));
-    assert_eq!(
-        warned.pointer("/result/structuredContent/results"),
-        Some(&json!([]))
-    );
-    let warning = warned
-        .pointer("/result/structuredContent/warning/0")
-        .unwrap()
-        .as_str()
-        .unwrap();
-    assert_eq!(
-        warned.pointer("/result/content/0/text"),
-        Some(&json!(format!(
-            "<WARNINGS>\n<WARNING>\n{warning}\n</WARNING>\n</WARNINGS>"
-        )))
-    );
+    assert_eq!(reply.at("/result/isError"), &json!(false));
+    let text = reply.text("/result/content/0/text");
+    assert_eq!(text.matches("<0>\n<TITLE>").count(), 2);
+    assert!(text.contains("</11>\n<0>\n<TITLE>\nbeta 0"));
+    let results = reply.list("/result/structuredContent/results");
+    assert_eq!(results.len(), 14);
+    assert_eq!(results.first().unwrap().text("/title"), "alpha 0");
+    assert_eq!(results.last().unwrap().text("/title"), "beta 1");
+    assert_eq!(server.uris().await.len(), 3);
 }

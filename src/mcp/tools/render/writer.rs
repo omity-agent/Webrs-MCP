@@ -46,7 +46,7 @@ impl PseudoXml {
     }
     pub(super) fn finish(mut self) -> String {
         if let Some(last) = self.text.pop() {
-            assert_eq!(last, '\n', "pseudo XML must end with a line feed");
+            assert_eq!(last, '\n', "XML must end with a line feed");
         }
         self.text
     }

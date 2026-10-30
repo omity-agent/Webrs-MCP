@@ -1,5 +1,2 @@
 [unstable]
 build-std = []
-
-[target.'cfg(all(target_os = "windows", target_env = "msvc"))']
-rustflags = ["--codegen", "target-feature=+crt-static"]

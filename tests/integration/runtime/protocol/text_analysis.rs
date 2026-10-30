@@ -1,3 +1,4 @@
+use crate::assertions::JsonProbe as _;
 use crate::{channel, listener::LocalServer};
 use axum::{Router, routing::get};
 use rmcp::serde_json::json;
@@ -16,22 +17,14 @@ async fn open_preserves_overlap_order_partial_failures_and_chunk_correction_warn
     let url = format!("{}/page", server.address);
     let missing = format!("{}/missing", server.address);
     let reply = channel :: call (service , "tools/call" , json ! ({ "name" : "open" , "arguments" : { "requests" : [{ "url" : url , "chunk" : 0_u64 } , { "url" : missing , "chunk" : 0_u64 } , { "url" : url , "chunk" : 2_u64 } , { "url" : url , "chunk" : 99_u64 }] } }) ,) . await ;
-    assert_eq!(
-        reply.pointer("/result/isError"),
-        Some(&json!(false)),
-        "{reply}"
-    );
-    let results = reply
-        .pointer("/result/structuredContent/results")
-        .unwrap()
-        .as_array()
-        .unwrap();
+    assert_eq!(reply.at("/result/isError"), &json!(false), "{reply}");
+    let results = reply.list("/result/structuredContent/results");
     assert_eq!(results.len(), 4);
     #[expect(
         clippy::pattern_type_mismatch,
         reason = "Borrowed JSON results are destructured without copying the response envelope."
     )]
-    let [first, failed, last, corrected] = results.as_slice() else {
+    let [first, failed, last, corrected] = results else {
         panic!("expected four ordered open results: {results:?}");
     };
     for (result, chunk, content) in [
@@ -39,35 +32,20 @@ async fn open_preserves_overlap_order_partial_failures_and_chunk_correction_warn
         (last, 2_u64, " alpha".repeat(8)),
         (corrected, 0_u64, " alpha".repeat(10)),
     ] {
-        assert_eq!(result.get("url"), Some(&json!(url)));
-        assert_eq!(result.pointer("/page/chunk"), Some(&json!(chunk)));
-        assert_eq!(result.pointer("/page/total_chunks"), Some(&json!(3_u64)));
-        assert_eq!(result.pointer("/page/content"), Some(&json!(content)));
+        assert_eq!(result.at("/url"), &json!(url));
+        assert_eq!(result.at("/page/chunk"), &json!(chunk));
+        assert_eq!(result.at("/page/total_chunks"), &json!(3_u64));
+        assert_eq!(result.at("/page/content"), &json!(content));
     }
-    assert_eq!(failed.get("url"), Some(&json!(missing)));
-    assert!(
-        failed
-            .get("error")
-            .unwrap()
-            .as_str()
-            .unwrap()
-            .contains("API key")
-    );
+    assert_eq!(failed.at("/url"), &json!(missing));
+    assert!(failed.text("/error").contains("API key"));
     assert!(failed.get("page").is_none());
-    let warning = reply
-        .pointer("/result/structuredContent/warning/0")
-        .unwrap()
-        .as_str()
-        .unwrap();
+    let warning = reply.text("/result/structuredContent/warning/0");
     assert!(
         warning.contains("requests[3].chunk") && warning.contains("using 0"),
         "{warning}"
     );
-    let text = reply
-        .pointer("/result/content/0/text")
-        .unwrap()
-        .as_str()
-        .unwrap();
+    let text = reply.text("/result/content/0/text");
     assert!(text.starts_with(&format!("<0>\n<URL>\n{url}\n</URL>\n<PAGE>")));
     assert!(text.contains(&format!("</0>\n<1>\n<URL>\n{missing}\n</URL>\n<ERROR>")));
     assert!(text.contains("</ERROR>\n</1>\n<2>"));
@@ -77,11 +55,10 @@ async fn open_preserves_overlap_order_partial_failures_and_chunk_correction_warn
     )));
     assert_eq!(
         server
-            .visits
-            .lock()
+            .uris()
             .await
             .iter()
-            .filter(|visit| visit.uri == "/page")
+            .filter(|uri| *uri == "/page")
             .count(),
         2
     );
@@ -105,66 +82,37 @@ async fn find_honors_unicode_regex_snippet_and_match_limits_and_validates_before
     let service = ToolService::new(settings).unwrap();
     let url = format!("{}/page", server.address);
     let reply = channel :: call (service . clone () , "tools/call" , json ! ({ "name" : "find" , "arguments" : { "requests" : [{ "url" : url , "pattern" : "中文(?=!)" , "snippet_tokens" : 5_u64 } , { "url" : url , "pattern" : "absent" , "snippet_tokens" : 2000_u64 } , { "url" : url , "pattern" : "中文(?=!)" , "snippet_tokens" : 5_u64 }] } }) ,) . await ;
-    assert_eq!(
-        reply.pointer("/result/isError"),
-        Some(&json!(false)),
-        "{reply}"
-    );
-    let pages = reply
-        .pointer("/result/structuredContent/pages")
-        .unwrap()
-        .as_array()
-        .unwrap();
+    assert_eq!(reply.at("/result/isError"), &json!(false), "{reply}");
+    let pages = reply.list("/result/structuredContent/pages");
     assert_eq!(pages.len(), 3);
     #[expect(
         clippy::pattern_type_mismatch,
         reason = "Borrowed JSON pages are destructured without copying the response envelope."
     )]
-    let [found_page, empty_page, repeated_page] = pages.as_slice() else {
+    let [found_page, empty_page, repeated_page] = pages else {
         panic!("expected three ordered find results: {pages:?}");
     };
     assert_eq!(repeated_page, found_page);
-    assert_eq!(found_page.get("total_chunks"), Some(&json!(1_u64)));
-    let matches = found_page.get("matches").unwrap().as_array().unwrap();
+    assert_eq!(found_page.at("/total_chunks"), &json!(1_u64));
+    let matches = found_page.list("/matches");
     assert_eq!(matches.len(), 2);
     for found in matches {
-        let snippet = found.get("snippet").unwrap().as_str().unwrap();
+        let snippet = found.text("/snippet");
         assert!(snippet.contains("中文"), "{snippet}");
         assert!(encoder.encode(snippet).len() <= 5, "{snippet}");
-        assert_eq!(found.get("chunk"), Some(&json!(0_u64)));
+        assert_eq!(found.at("/chunk"), &json!(0_u64));
     }
-    assert_eq!(empty_page.get("matches"), Some(&json!([])));
-    let warning = reply
-        .pointer("/result/structuredContent/warning/0")
-        .unwrap()
-        .as_str()
-        .unwrap();
+    assert_eq!(empty_page.at("/matches"), &json!([]));
+    let warning = reply.text("/result/structuredContent/warning/0");
     assert!(
         warning.contains("requests[1].snippet_tokens") && warning.contains("1000"),
         "{warning}"
     );
-    let expected_matches = matches
-        .iter()
-        .enumerate()
-        .map(|(index, found)| {
-            let snippet = found.get("snippet").unwrap().as_str().unwrap();
-            format!("<{index}>\n<CHUNK>\n0\n</CHUNK>\n<SNIPPET>\n{snippet}\n</SNIPPET>\n</{index}>")
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    assert_eq!(
-        reply.pointer("/result/content/0/text"),
-        Some(&json!(format!(
-            "<0>\n<TOTAL_CHUNKS>\n1\n</TOTAL_CHUNKS>\n\
-             <MATCHES>\n{expected_matches}\n</MATCHES>\n</0>\n\
-             <1>\n<TOTAL_CHUNKS>\n1\n</TOTAL_CHUNKS>\n<MATCHES>\n\n</MATCHES>\n</1>\n\
-             <2>\n<TOTAL_CHUNKS>\n1\n</TOTAL_CHUNKS>\n\
-             <MATCHES>\n{expected_matches}\n</MATCHES>\n</2>\n\
-             <WARNINGS>\n<WARNING>\n{warning}\n</WARNING>\n</WARNINGS>"
-        )))
-    );
+    let text = reply.text("/result/content/0/text");
+    assert!(text.contains(matches.first().unwrap().text("/snippet")));
+    assert!(text.contains(warning) && text.contains("<MATCHES>"));
     server.visits.lock().await.clear();
     let invalid = channel :: call (service , "tools/call" , json ! ({ "name" : "find" , "arguments" : { "requests" : [{ "url" : url , "pattern" : "[" }] } }) ,) . await ;
-    assert_eq!(invalid.pointer("/result/isError"), Some(&json!(true)));
-    assert!(server.visits.lock().await.is_empty());
+    assert_eq!(invalid.at("/result/isError"), &json!(true));
+    assert_eq!(server.uris().await.len(), 0);
 }

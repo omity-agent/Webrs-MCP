@@ -1,4 +1,6 @@
 extern crate alloc;
+#[path = "../support/assertions.rs"]
+mod assertions;
 #[cfg(test)]
 mod commandline;
 #[path = "../support/envelope.rs"]

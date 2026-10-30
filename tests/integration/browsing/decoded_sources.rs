@@ -1,4 +1,5 @@
 use super::acceptance::receive;
+use crate::assertions::JsonProbe as _;
 use crate::listener::LocalServer;
 use alloc::sync::Arc;
 use axum::{Json, Router, http::StatusCode, routing::get};
@@ -46,16 +47,15 @@ async fn source_routing_preserves_raw_paths_and_registry_content_priorities() {
         .unwrap();
     assert ! (page . markdown . starts_with ("{\n  \"name\": \"@types/node\",\n  \"description\": \"Package\",\n  \"readme\": \"# Demo\",\n  \"repository\"") , "{}" , page . markdown);
     let decoded: Value = sonic_rs::from_str(&page.markdown).unwrap();
-    assert_eq!(decoded.get("_id"), Some(&json!("demo")));
-    assert_eq!(decoded.get("versions"), Some(&json ! ({ "1" : { } })));
+    assert_eq!(decoded.at("/_id"), &json!("demo"));
+    assert_eq!(decoded.at("/versions"), &json ! ({ "1" : { } }));
     assert!(page.markdown.find("\"_id\"").unwrap() < page.markdown.find("\"versions\"").unwrap());
     assert!(
         server
-            .visits
-            .lock()
+            .uris()
             .await
             .iter()
-            .any(|visit| visit.uri == "/registry/@types%2Fnode")
+            .any(|uri| uri == "/registry/@types%2Fnode")
     );
 }
 #[tokio::test]

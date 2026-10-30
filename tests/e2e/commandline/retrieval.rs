@@ -1,3 +1,4 @@
+use crate::assertions::JsonProbe as _;
 use crate::{
     listener::LocalServer,
     process::{
@@ -20,7 +21,7 @@ async fn configured_open_delivers_full_local_content_in_json_and_xml() {
     settings.chunking.chunk_tokens = 2;
     let file = settings_file(&settings);
     let url = format!("{}/page", server.address);
-    for format in ["json", "xml"] {
+    for format in ["json", "agent"] {
         let opened = invoke(file.path(), &["browse", &url, "--format", format]).await;
         assert_success(&opened);
         if format == "json" {
@@ -59,7 +60,7 @@ async fn remote_readers_use_api_keys_from_environment_variables() {
                 "/tinyfish",
                 post(|Json(body): Json<Value>| async move {
                     Json(json!({
-                        "results": [{ "url": body.pointer("/urls/0").unwrap(), "text": PAGE }],
+                        "results": [{ "url": body.at("/urls/0"), "text": PAGE }],
                         "errors": []
                     }))
                 }),
@@ -89,10 +90,7 @@ async fn remote_readers_use_api_keys_from_environment_variables() {
         .await;
         assert_success(&output);
         let response: Value = sonic_rs::from_str(stdout(&output)).unwrap();
-        assert_eq!(
-            response.pointer("/results/0/page/content"),
-            Some(&json!(PAGE))
-        );
+        assert_eq!(response.at("/results/0/page/content"), &json!(PAGE));
         let visits = server.visits.lock().await;
         let request = visits.iter().find(|visit| visit.uri == route).unwrap();
         assert_eq!(request.headers.get(header).unwrap(), expected);

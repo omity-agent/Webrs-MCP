@@ -6,12 +6,7 @@ use crate::{
 use clap::{ArgMatches, Args, Command, FromArgMatches as _};
 #[derive(Args)]
 struct Presentation {
-    #[arg(
-        long,
-        value_enum,
-        default_value_t,
-        help = "Output format: raw pseudo XML or JSON"
-    )]
+    #[arg(long, value_enum, default_value_t)]
     format: OutputFormat,
 }
 #[derive(Args)]
@@ -36,10 +31,8 @@ struct OpenInput {
 }
 pub(super) fn definitions(names: &ToolNames) -> [Command; 2] {
     [
-        SearchInput::augment_args(
-            Command::new(names.search_query.clone()).about("Search with one query"),
-        ),
-        OpenInput::augment_args(Command::new(names.open.clone()).about("Open one full page")),
+        SearchInput::augment_args(Command::new(names.search_query.clone())),
+        OpenInput::augment_args(Command::new(names.open.clone())),
     ]
 }
 pub(super) fn invocation(

@@ -123,7 +123,10 @@ async fn learn_specialization_follows_redirects_without_affecting_excluded_secti
                         .get("accept")
                         .is_some_and(|value| value == "text/markdown")
                     {
-                        ([("content-type", "text/markdown")], "# Learn document")
+                        (
+                            [("content-type", "text/markdown")],
+                            "---\nlayout: Conceptual\ntitle: Learn\n---\n\n# Learn document",
+                        )
                     } else {
                         ([("content-type", "text/html")], "<html>Document</html>")
                     }
@@ -141,11 +144,10 @@ async fn learn_specialization_follows_redirects_without_affecting_excluded_secti
     assert_eq!(page.markdown.as_ref(), "# Learn document");
     assert!(
         server
-            .visits
-            .lock()
+            .uris()
             .await
             .iter()
-            .any(|visit| visit.uri == "/en-us/windows/article?accept=text%2Fmarkdown")
+            .any(|uri| uri == "/en-us/windows/article?accept=text%2Fmarkdown")
     );
     server.visits.lock().await.clear();
     for path in [
@@ -162,10 +164,9 @@ async fn learn_specialization_follows_redirects_without_affecting_excluded_secti
     }
     assert!(
         server
-            .visits
-            .lock()
+            .uris()
             .await
             .iter()
-            .all(|visit| !visit.uri.contains("accept="))
+            .all(|uri| !uri.contains("accept="))
     );
 }

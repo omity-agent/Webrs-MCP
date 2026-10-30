@@ -98,14 +98,7 @@ async fn provider_posts_obey_body_limits_and_never_replay_across_redirects() {
             .unwrap();
         assert!(error.client_message().contains(expected), "{error}");
     }
-    assert!(
-        server
-            .visits
-            .lock()
-            .await
-            .iter()
-            .all(|visit| visit.uri != "/target")
-    );
+    assert!(server.uris().await.iter().all(|uri| uri != "/target"));
 }
 #[tokio::test]
 async fn cloned_http_clients_share_body_permits_and_queue_time_counts_toward_deadline() {
@@ -145,25 +138,17 @@ async fn cloned_http_clients_share_body_permits_and_queue_time_counts_toward_dea
     release.notify_one();
     assert_eq!(holding.await.unwrap().unwrap().body.as_ref(), b"done");
     assert!(queued.err().unwrap().client_message().contains("timed out"));
-    assert!(
-        server
-            .visits
-            .lock()
-            .await
-            .iter()
-            .all(|visit| visit.uri != "/api")
-    );
+    assert!(server.uris().await.iter().all(|uri| uri != "/api"));
     search
         .search_many(&[query("recovered")], &key, true)
         .await
         .unwrap();
     assert_eq!(
         server
-            .visits
-            .lock()
+            .uris()
             .await
             .iter()
-            .filter(|visit| visit.uri == "/api")
+            .filter(|uri| *uri == "/api")
             .count(),
         1
     );
